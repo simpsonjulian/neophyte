@@ -222,8 +222,7 @@ public class LuceneDataSource extends LogBackedXaDataSource
                         this.baseStorePath, e );
             }
 
-            xaContainer.getLogicalLog().setKeepLogs(
-                    shouldKeepLog( (String) params.get( Config.KEEP_LOGICAL_LOGS ), DEFAULT_NAME ) );
+            setKeepLogicalLogsIfSpecified( (String) params.get( Config.KEEP_LOGICAL_LOGS ), DEFAULT_NAME );
             setLogicalLogAtCreationTime( xaContainer.getLogicalLog() );
         }
     }
@@ -282,45 +281,47 @@ public class LuceneDataSource extends LogBackedXaDataSource
     }
 
     @Override
-    public synchronized void close()
+    public void close()
     {
-        if ( closed )
+        synchronized ( this )
         {
-            return;
-        }
+            if ( closed )
+            {
+                return;
+            }
+            closed = true;
+            for ( IndexSearcherRef searcher : indexSearchers.values() )
+            {
+                try
+                {
+                    searcher.dispose();
+                }
+                catch ( IOException e )
+                {
+                    e.printStackTrace();
+                }
+            }
+            indexSearchers.clear();
 
-        for ( IndexSearcherRef searcher : indexSearchers.values() )
-        {
-            try
+            for ( Map.Entry<IndexIdentifier, Pair<IndexWriter, AtomicBoolean>> entry : indexWriters.entrySet() )
             {
-                searcher.dispose();
+                try
+                {
+                    entry.getValue().first().close( true );
+                }
+                catch ( IOException e )
+                {
+                    throw new RuntimeException( "Unable to close index writer " + entry.getKey(), e );
+                }
             }
-            catch ( IOException e )
-            {
-                e.printStackTrace();
-            }
+            indexWriters.clear();
         }
-        indexSearchers.clear();
-
-        for ( Map.Entry<IndexIdentifier, Pair<IndexWriter, AtomicBoolean>> entry : indexWriters.entrySet() )
-        {
-            try
-            {
-                entry.getValue().first().close( true );
-            }
-            catch ( IOException e )
-            {
-                throw new RuntimeException( "Unable to close index writer " + entry.getKey(), e );
-            }
-        }
-        indexWriters.clear();
 
         if ( xaContainer != null )
         {
             xaContainer.close();
         }
         providerStore.close();
-        closed = true;
     }
 
     @Override
@@ -748,8 +749,8 @@ public class LuceneDataSource extends LogBackedXaDataSource
     }
 
     @Override
-    public ClosableIterable<File> listStoreFiles() throws IOException
-    {
+    public ClosableIterable<File> listStoreFiles( boolean includeLogicalLogs ) throws IOException
+    {   // Never include logical logs since they are of little importance
         final Collection<File> files = new ArrayList<File>();
         final Collection<SnapshotDeletionPolicy> snapshots = new ArrayList<SnapshotDeletionPolicy>();
         makeSureAllIndexesAreInstantiated();

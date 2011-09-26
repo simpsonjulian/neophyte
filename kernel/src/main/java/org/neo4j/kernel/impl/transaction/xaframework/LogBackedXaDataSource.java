@@ -87,9 +87,9 @@ public abstract class LogBackedXaDataSource extends XaDataSource
     }
 
     @Override
-    public void rotateLogicalLog() throws IOException
+    public long rotateLogicalLog() throws IOException
     {
-        logicalLog.rotate();
+        return logicalLog.rotate();
     }
 
     @Override
@@ -132,5 +132,14 @@ public abstract class LogBackedXaDataSource extends XaDataSource
     public LogExtractor getLogExtractor( long startTxId, long endTxIdHint ) throws IOException
     {
         return logicalLog.getLogExtractor( startTxId, endTxIdHint );
+    }
+
+    protected void setKeepLogicalLogsIfSpecified( String configString, String dataSourceName )
+    {
+        Boolean keepLogs = shouldKeepLog( configString, dataSourceName );
+        if ( keepLogs != null )
+        {
+            getXaContainer().getLogicalLog().setKeepLogs( keepLogs.booleanValue() );
+        }
     }
 }
