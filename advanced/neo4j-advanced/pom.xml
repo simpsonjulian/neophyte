@@ -10,7 +10,7 @@
 
   <groupId>org.neo4j</groupId>
   <artifactId>neo4j-advanced</artifactId>
-  <version>1.8-SNAPSHOT</version>
+  <version>1.9-SNAPSHOT</version>
   <name>Neo4j Advanced</name>
   <packaging>jar</packaging>
   <url>http://components.neo4j.org/${project.artifactId}/${project.version}</url>
@@ -19,7 +19,7 @@
   <properties>
     <short-name>neo4j-advanced</short-name>
     <bundle.namespace>org.neo4j</bundle.namespace>
-    <neo4j.version>1.8-SNAPSHOT</neo4j.version>
+    <neo4j.version>1.9-SNAPSHOT</neo4j.version>
     <docs.url>http://docs.neo4j.org/chunked/${project.version}/deployment-installation.html#editions</docs.url>
     <docs-plugin.skip>true</docs-plugin.skip>
   </properties>
@@ -37,7 +37,7 @@
     <dependency>
       <groupId>org.neo4j</groupId>
       <artifactId>neo4j-management</artifactId>
-      <version>1.8-SNAPSHOT</version>
+      <version>1.9-SNAPSHOT</version>
     </dependency>
   </dependencies>
 
@@ -131,9 +131,9 @@ terms of the relevant Commercial Agreement.
               <outputDirectory>${project.build.directory}/site/apidocs</outputDirectory>
               <sourcepath>${project.build.directory}/javadoc-sources</sourcepath>
               <header>${project.name}</header>
-              <doctitle>${project.name} API</doctitle>
+              <doctitle>${project.name} ${project.version} API</doctitle>
               <skip>${javadoc.skip}</skip>
-              <windowtitle>${project.name} API</windowtitle>
+              <windowtitle>${project.name} ${project.version} API</windowtitle>
 <excludePackageNames>*.impl.*:org.neo4j.ext.udc:org.neo4j.kernel.ha:org.neo4j.kernel.ha.*:org.neo4j.com:org.neo4j.com.*</excludePackageNames>
             <groups>
               <group>
@@ -211,8 +211,8 @@ terms of the relevant Commercial Agreement.
         <artifactId>maven-javadoc-plugin</artifactId>
         <configuration>
           <header>${project.name}</header>
-          <doctitle>${project.name} API</doctitle>
-          <windowtitle>${project.name} API</windowtitle>
+          <doctitle>${project.name} ${project.version} API</doctitle>
+          <windowtitle>${project.name} ${project.version} API</windowtitle>
           <excludePackageNames>*.impl.*:org.neo4j.ext.udc:org.neo4j.kernel.ha:org.neo4j.kernel.ha.*:org.neo4j.com:org.neo4j.com.*</excludePackageNames>
           <groups>
             <group>
