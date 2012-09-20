@@ -49,3 +49,6 @@ for branch in $BRANCHES; do
     merge_branch $project $branch
   done
 done
+for project in $PROJECTS; do
+  merge_branch $project master
+done
