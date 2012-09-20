@@ -20,9 +20,13 @@
 package org.neo4j.cypher.internal.parser.v1_8
 
 import org.neo4j.cypher.internal.commands._
+import expressions._
+import org.neo4j.cypher.SyntaxException
 
-trait Expressions extends Base with ParserPattern with Predicates {
-  def expression: Parser[Expression] = term ~ rep("+" ~ term | "-" ~ term) ^^ {
+trait Expressions extends Base with ParserPattern with Predicates with StringLiteral {
+  def expression: Parser[Expression] =
+
+    term ~ rep("+" ~ term | "-" ~ term) ^^ {
     case head ~ rest =>
       var result = head
       rest.foreach {
@@ -64,48 +68,7 @@ trait Expressions extends Base with ParserPattern with Predicates {
       | parameter
       | entity
       | parens(expression)
-      | failure("illegal start of value"))
-
-  def stringLit: Parser[Expression] = Parser {
-    case in if in.atEnd => Failure("out of string", in)
-    case in =>
-      val start = handleWhiteSpace(in.source, in.offset)
-      val string = in.source.subSequence(start, in.source.length()).toString
-      val startChar = string.charAt(0)
-      if (startChar != '\"' && startChar != '\'')
-        Failure("expected string", in)
-      else {
-
-        var ls = string.toList.tail
-        val sb = new StringBuilder(ls.length)
-        var idx = start
-        var result: Option[ParseResult[Expression]] = None
-
-        while (!ls.isEmpty && result.isEmpty) {
-          val (pref, suf) = ls span { c => c != '\\' && c != startChar }
-          idx += pref.length
-          sb ++= pref
-
-          if (suf.isEmpty)
-            result = Some(Failure("end of string missing", in))
-
-          val first: Char = suf(0)
-          first match {
-            case c if c == startChar         =>
-              result = Some(Success(Literal(sb.result()), in.drop(idx - in.offset + 2)))
-            case '\\' if suf(1) == '\''||suf(1)=='\"' =>
-              sb.append(suf(1))
-              idx += 2
-              ls = suf.drop(2)
-          }
-        }
-
-        result match {
-          case Some(x) => x
-          case None    => Failure("end of string missing", in)
-        }
-      }
-  }
+      | failure("illegal value"))
 
   def numberLiteral: Parser[Expression] = number ^^ (x => {
     val value: Any = if (x.contains("."))
@@ -116,7 +79,7 @@ trait Expressions extends Base with ParserPattern with Predicates {
     Literal(value)
   })
 
-  def entity: Parser[Entity] = identity ^^ (x => Entity(x))
+  def entity: Parser[Identifier] = identity ^^ (x => Identifier(x))
 
   def collectionLiteral: Parser[Expression] = "[" ~> repsep(expression, ",") <~ "]" ^^ (seq => Collection(seq: _*))
 
@@ -127,8 +90,11 @@ trait Expressions extends Base with ParserPattern with Predicates {
   def createProperty(entity: String, propName: String): Expression
 
   def nullableProperty: Parser[Expression] = (
+    property ~> "!=" ^^^ (throw new SyntaxException("Cypher does not support != for inequality comparisons. " +
+                                                    "It's used for nullable properties instead.\n" +
+                                                    "You probably meant <> instead. Read more about this in the operators chapter in the manual.")) |
     property <~ "?" ^^ (p => new Nullable(p) with DefaultTrue) |
-      property <~ "!" ^^ (p => new Nullable(p) with DefaultFalse))
+    property <~ "!" ^^ (p => new Nullable(p) with DefaultFalse))
 
   def extract: Parser[Expression] = ignoreCase("extract") ~> parens(identity ~ ignoreCase("in") ~ expression ~ ":" ~ expression) ^^ {
     case (id ~ in ~ iter ~ ":" ~ expression) => ExtractFunction(iter, id, expression)

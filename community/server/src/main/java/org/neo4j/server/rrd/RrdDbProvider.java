@@ -21,25 +21,26 @@ package org.neo4j.server.rrd;
 
 import javax.ws.rs.ext.Provider;
 
-import org.neo4j.server.database.AbstractInjectableProvider;
+import org.neo4j.server.database.Database;
+import org.neo4j.server.database.InjectableProvider;
 import org.rrd4j.core.RrdDb;
 
 import com.sun.jersey.api.core.HttpContext;
 
 @Provider
-public class RrdDbProvider extends AbstractInjectableProvider<RrdDb>
+public class RrdDbProvider extends InjectableProvider<RrdDb>
 {
-    private RrdDb rrdDb;
+    private Database database;
 
-    public RrdDbProvider( RrdDb rrdDb )
+    public RrdDbProvider( Database database )
     {
         super( RrdDb.class );
-        this.rrdDb = rrdDb;
+        this.database = database;
     }
 
     @Override
     public RrdDb getValue( HttpContext c )
     {
-        return rrdDb;
+        return database.rrdDb();
     }
 }

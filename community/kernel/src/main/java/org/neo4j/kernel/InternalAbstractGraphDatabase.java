@@ -22,7 +22,6 @@ package org.neo4j.kernel;
 
 import static org.neo4j.helpers.Exceptions.launderedException;
 
-import java.io.File;
 import java.io.IOException;
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
@@ -55,13 +54,14 @@ import org.neo4j.graphdb.index.IndexProvider;
 import org.neo4j.helpers.DaemonThreadFactory;
 import org.neo4j.helpers.Pair;
 import org.neo4j.helpers.Service;
+import org.neo4j.helpers.collection.Iterables;
 import org.neo4j.kernel.configuration.Config;
 import org.neo4j.kernel.configuration.ConfigurationChange;
 import org.neo4j.kernel.configuration.ConfigurationChangeListener;
+import org.neo4j.kernel.configuration.HasSettings;
 import org.neo4j.kernel.guard.Guard;
 import org.neo4j.kernel.impl.cache.Cache;
 import org.neo4j.kernel.impl.cache.CacheProvider;
-import org.neo4j.kernel.impl.cache.MeasureDoNothing;
 import org.neo4j.kernel.impl.cache.MonitorGc;
 import org.neo4j.kernel.impl.core.Caches;
 import org.neo4j.kernel.impl.core.DefaultCaches;
@@ -181,8 +181,6 @@ public abstract class InternalAbstractGraphDatabase
     protected RecoveryVerifier recoveryVerifier;
     protected Guard guard;
 
-    protected MeasureDoNothing monitorGc;
-
     protected NodeAutoIndexerImpl nodeAutoIndexer;
     protected RelationshipAutoIndexerImpl relAutoIndexer;
     protected KernelData extensions;
@@ -214,7 +212,9 @@ public abstract class InternalAbstractGraphDatabase
     {
         Map<String, CacheProvider> map = new HashMap<String, CacheProvider>();
         for ( CacheProvider provider : cacheProviders )
+        {
             map.put( provider.getName(), provider );
+        }
         return map;
     }
 
@@ -255,10 +255,10 @@ public abstract class InternalAbstractGraphDatabase
         for( Map.Entry<String, String> autoConfig : autoConfiguration.entrySet() )
         {
             // Don't override explicit settings
-            if( !params.containsKey( autoConfig.getKey() ) )
+            String key = autoConfig.getKey();
+            if( !params.containsKey( key ) )
             {
-            	String key = autoConfig.getKey();
-                configParams.put( autoConfig.getKey(), autoConfig.getValue() );
+                configParams.put( key, autoConfig.getValue() );
             }
         }
 
@@ -274,7 +274,9 @@ public abstract class InternalAbstractGraphDatabase
         String cacheTypeName = config.get( Configuration.cache_type );
         CacheProvider cacheProvider = cacheProviders.get( cacheTypeName );
         if ( cacheProvider == null )
+        {
             throw new IllegalArgumentException( "No cache type '" + cacheTypeName + "'" );
+        }
 
         kernelEventHandlers = new KernelEventHandlers();
 
@@ -1024,31 +1026,22 @@ public abstract class InternalAbstractGraphDatabase
     }
     
 	private List<Class<?>> getSettingsClasses() {
-		// Get the list of settings classes for extensions
+
         List<Class<?>> settingsClasses = new ArrayList<Class<?>>();
         settingsClasses.add( GraphDatabaseSettings.class );
-        for( KernelExtension<?> kernelExtension : kernelExtensions )
+
+        // Get the list of settings classes for extensions
+        for( HasSettings potentiallyConfigurable : Iterables.concat( kernelExtensions, cacheProviders.values()) )
         {
-            Class<?> settingsClass = kernelExtension.getSettingsClass();
+            Class<?> settingsClass = potentiallyConfigurable.getSettingsClass();
             if( settingsClass != null )
             {
                 settingsClasses.add( settingsClass );
             }
         }
+
 		return settingsClasses;
 	}
-
-    private String canonicalize( String path )
-    {
-        try
-        {
-            return new File( path ).getCanonicalFile().getAbsolutePath();
-        }
-        catch ( IOException e )
-        {
-            return new File( path ).getAbsolutePath();
-        }
-    }
 
     @Override
     public boolean equals( Object o )
@@ -1084,12 +1077,11 @@ public abstract class InternalAbstractGraphDatabase
 
 	protected class DefaultKernelData extends KernelData implements Lifecycle
     {
-        private final Config config;
         private final GraphDatabaseAPI graphDb;
 
         public DefaultKernelData(Config config, GraphDatabaseAPI graphDb)
         {
-            this.config = config;
+            super( config );
             this.graphDb = graphDb;
         }
 
@@ -1097,18 +1089,6 @@ public abstract class InternalAbstractGraphDatabase
         public Version version()
         {
             return Version.getKernel();
-        }
-
-        @Override
-        public Config getConfig()
-        {
-            return config;
-        }
-
-        @Override
-        public Map<String, String> getConfigParams()
-        {
-            return config.getParams();
         }
 
         @Override

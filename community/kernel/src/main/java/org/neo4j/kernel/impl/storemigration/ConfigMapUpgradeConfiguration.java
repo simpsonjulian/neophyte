@@ -34,7 +34,7 @@ public class ConfigMapUpgradeConfiguration implements UpgradeConfiguration
     @Override
     public void checkConfigurationAllowsAutomaticUpgrade()
     {
-        if ( !config.getBoolean( GraphDatabaseSettings.allow_store_upgrade ) )
+        if ( !config.get( GraphDatabaseSettings.allow_store_upgrade ) )
         {
             throw new UpgradeNotAllowedByConfigurationException();
         }

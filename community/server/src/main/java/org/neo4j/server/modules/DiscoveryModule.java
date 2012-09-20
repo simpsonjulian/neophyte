@@ -21,6 +21,8 @@ package org.neo4j.server.modules;
 
 import static org.neo4j.server.JAXRSHelper.listFrom;
 
+import java.util.List;
+
 import org.neo4j.kernel.impl.util.StringLogger;
 import org.neo4j.server.configuration.Configurator;
 import org.neo4j.server.logging.Logger;
@@ -37,19 +39,24 @@ public class DiscoveryModule implements ServerModule
     {
     	this.webServer = webServer;
     }
-    
+
     @Override
 	public void start( StringLogger logger )
     {
-        webServer.addJAXRSPackages( listFrom( new String[] { Configurator.DISCOVERY_API_PACKAGE } ), ROOT_PATH );
+        webServer.addJAXRSPackages( getPackageNames(), ROOT_PATH, null );
         log.info( "Mounted discovery module at [%s]", ROOT_PATH );
         if ( logger != null )
             logger.logMessage( "Mounted discovery module (" + Configurator.DISCOVERY_API_PACKAGE + ") at: " + ROOT_PATH );
     }
 
+    private List<String> getPackageNames()
+    {
+        return listFrom( new String[] { Configurator.DISCOVERY_API_PACKAGE } );
+    }
+
     @Override
 	public void stop()
     {
-    	webServer.removeJAXRSPackages( listFrom( new String[] { Configurator.DISCOVERY_API_PACKAGE } ), ROOT_PATH );
+    	webServer.removeJAXRSPackages( getPackageNames(), ROOT_PATH );
     }
 }

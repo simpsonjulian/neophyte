@@ -20,8 +20,8 @@
 package org.neo4j.cypher.internal.parser.v1_8
 
 import scala.util.parsing.combinator._
-import org.neo4j.cypher.internal.commands.{Literal, ParameterExpression, Expression}
 import org.neo4j.helpers.ThisShouldNotHappenError
+import org.neo4j.cypher.internal.commands.expressions.{ParameterExpression, Expression, Literal}
 
 abstract class Base extends JavaTokenParsers {
   var namer = new NodeNamer
@@ -39,6 +39,8 @@ abstract class Base extends JavaTokenParsers {
         Success(result.head, pos)
     }
   }
+
+  def reduce[A,B](in:Seq[(Seq[A], Seq[B])]):(Seq[A], Seq[B]) = if (in.isEmpty) (Seq(),Seq()) else in.reduce((a, b) => (a._1 ++ b._1, a._2 ++ b._2))
 
   def ignoreCases(strings: String*): Parser[String] = ignoreCases(strings.toList)
 

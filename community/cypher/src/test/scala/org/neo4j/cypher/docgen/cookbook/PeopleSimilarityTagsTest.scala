@@ -38,6 +38,7 @@ class PeopleSimilarityTagsTest extends DocumentingTestBase {
       "Sara favorite Horses")
 
   def section = "cookbook"
+  override val noTitle = true;
 
   override protected def getGraphvizStyle: GraphStyle = {
     AsciiDocSimpleStyle.withAutomaticRelationshipTypeColors()
@@ -60,7 +61,8 @@ class PeopleSimilarityTagsTest extends DocumentingTestBase {
       		"RETURN people.name as name, count(*) as similar_favs " +
       		"ORDER BY similar_favs DESC",
       returns = "The query returns the list of possible friends ranked by them liking similar stuff that are not yet friends.",
-      (p) => assertEquals(List(Map("name" -> "Sara", "similar_favs" -> 2),
-          Map("name" -> "Derrick", "similar_favs" -> 1)), p.toList))
+      assertions = (p) => assertEquals(List(
+        Map("name" -> "Sara", "similar_favs" -> 2),
+        Map("name" -> "Derrick", "similar_favs" -> 1)), p.toList))
   } 
 }

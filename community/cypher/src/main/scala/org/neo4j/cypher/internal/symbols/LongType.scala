@@ -25,7 +25,10 @@ object LongType {
   def apply() = instance
 }
 
-class LongType extends NumberType
+class LongType extends NumberType {
+  override def parentType:CypherType = NumberType()
+  override def toString = "Long"
+}
 
 
 

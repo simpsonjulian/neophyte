@@ -24,6 +24,7 @@ import static org.neo4j.server.JAXRSHelper.listFrom;
 import java.net.URI;
 import java.net.URISyntaxException;
 import java.net.UnknownHostException;
+import java.util.List;
 
 import org.apache.commons.configuration.Configuration;
 import org.neo4j.kernel.impl.util.StringLogger;
@@ -43,17 +44,17 @@ public class ManagementApiModule implements ServerModule
     	this.webServer = webServer;
     	this.config = config;
     }
-    
+
     @Override
 	public void start( StringLogger logger )
     {
         try
         {
-            webServer.addJAXRSPackages( listFrom( new String[] { Configurator.MANAGEMENT_API_PACKAGE } ),
-                            managementApiUri(  ).toString() );
-            log.info( "Mounted management API at [%s]", managementApiUri(  ).toString() );
+            String serverMountPoint = managementApiUri().toString();
+            webServer.addJAXRSPackages( getPackageNames(), serverMountPoint, null);
+            log.info( "Mounted management API at [%s]", serverMountPoint );
             if ( logger != null )
-                logger.logMessage( "Mounted management API at: " + managementApiUri( ).toString() );
+                logger.logMessage( "Mounted management API at: " + serverMountPoint );
         }
         catch ( UnknownHostException e )
         {
@@ -61,12 +62,17 @@ public class ManagementApiModule implements ServerModule
         }
     }
 
+    private List<String> getPackageNames()
+    {
+        return listFrom( new String[] { Configurator.MANAGEMENT_API_PACKAGE } );
+    }
+
     @Override
 	public void stop()
     {
         try
         {
-	    	webServer.removeJAXRSPackages( listFrom( new String[] { Configurator.MANAGEMENT_API_PACKAGE } ),
+	    	webServer.removeJAXRSPackages( getPackageNames(),
 	                managementApiUri(  ).toString() );
     	}
 	    catch ( UnknownHostException e )

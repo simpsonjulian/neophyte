@@ -20,16 +20,17 @@
 
 package org.neo4j.kernel.configuration;
 
+import static org.neo4j.helpers.Specifications.or;
+import static org.neo4j.helpers.collection.Iterables.map;
+
 import java.lang.reflect.Field;
+import java.util.Arrays;
+
 import org.neo4j.graphdb.factory.GraphDatabaseSetting;
 import org.neo4j.helpers.Function;
 import org.neo4j.helpers.Specification;
 import org.neo4j.helpers.Specifications;
-import org.neo4j.helpers.collection.Iterables;
 import org.neo4j.kernel.lifecycle.Lifecycle;
-
-import static org.neo4j.helpers.Specifications.*;
-import static org.neo4j.helpers.collection.Iterables.*;
 
 /**
 * When a specified change happens, restart the given LifeSupport instance.
@@ -60,7 +61,7 @@ public class RestartOnChange
                     return Specifications.not( Specifications.<String>TRUE() );
                 }
             }
-        }, Iterables.iterable( settingsClass.getFields() ) ) ), life);
+        }, Arrays.asList( settingsClass.getFields() ) ) ), life);
     }
     
     public RestartOnChange( final String configurationNamePrefix, Lifecycle life)

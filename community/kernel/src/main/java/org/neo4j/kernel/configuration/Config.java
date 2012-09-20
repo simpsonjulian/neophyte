@@ -21,6 +21,7 @@
 package org.neo4j.kernel.configuration;
 
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
@@ -71,7 +72,7 @@ public class Config implements DiagnosticsProvider
     
     public Config(Map<String, String> inputParams, Class<?> ... settingsClasses)
     {
-        this(inputParams, Iterables.iterable(settingsClasses));
+        this(inputParams, Arrays.asList(settingsClasses));
     }
     
     public Config(Map<String, String> inputParams, Iterable<Class<?>> settingsClasses)
@@ -93,7 +94,7 @@ public class Config implements DiagnosticsProvider
     {
         return params.keySet();
     }
-    
+
     public boolean isSet( GraphDatabaseSetting<?> graphDatabaseSetting )
     {
         return params.containsKey( graphDatabaseSetting.name() ) && params.get( graphDatabaseSetting.name() ) != null;
@@ -105,7 +106,7 @@ public class Config implements DiagnosticsProvider
      * @param setting
      * @return
      */
-    public <T> T get(GraphDatabaseSetting<T> setting)
+    public <T> T get( GraphDatabaseSetting<T> setting )
     {
         String string = params.get( setting.name() );
         if (string != null)
@@ -481,13 +482,13 @@ public class Config implements DiagnosticsProvider
 
     @Deprecated
     static final String LOAD_EXTENSIONS = "load_kernel_extensions";
-    
+
     @Deprecated
     public boolean getBoolean(GraphDatabaseSetting.BooleanSetting setting)
     {
         return get( setting );
     }
-    
+
     @Deprecated
     public int getInteger(GraphDatabaseSetting.IntegerSetting setting)
     {

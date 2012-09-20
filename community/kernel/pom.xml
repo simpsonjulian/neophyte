@@ -30,7 +30,7 @@
   <modelVersion>4.0.0</modelVersion>
   <groupId>org.neo4j</groupId>
   <artifactId>neo4j-kernel</artifactId>
-  <version>1.8-SNAPSHOT</version>
+  <version>1.9-SNAPSHOT</version>
   <name>Neo4j - Graph Database Kernel</name>
   <description>
  Neo4j kernel is a lightweight, embedded Java database designed to
@@ -312,6 +312,38 @@ public class ComponentVersion extends Version
               <packages>org.neo4j.tooling:org.neo4j.tooling.*</packages>
             </group>
           </groups>
+        </configuration>
+      </plugin>
+      <plugin>
+        <groupId>org.neo4j.build.plugins</groupId>
+        <artifactId>clirr-maven-plugin</artifactId>
+        <version>1.0</version>
+        <executions>
+          <execution>
+            <goals>
+              <goal>check</goal>
+            </goals>
+          </execution>
+        </executions>
+        <configuration>
+          <failOnError>false</failOnError>
+          <logResults>true</logResults>
+          <!-- This is temporarily hard-coded, because the versionsBack attribute seems to not work on OS X, we'll
+           need to fix that. -->
+          <comparisonVersion>1.7</comparisonVersion>
+          <includes>
+            <include>org/neo4j/graphdb/**</include>
+          </includes>
+
+          <!-- These are temporary exceptions for the 1.8 release, please remove after that. -->
+          <excludeMessageCodes>
+            <param>6006</param><!-- Field was made final. -->
+          </excludeMessageCodes>
+          <excludes>
+            <exclude>org/neo4j/graphdb/factory/GraphDatabaseSettings*UseMemoryMappedBuffers</exclude>
+            <exclude>org/neo4j/graphdb/factory/GraphDatabaseSetting*BooleanSetting</exclude>
+          </excludes>
+
         </configuration>
       </plugin>
     </plugins>

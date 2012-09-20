@@ -87,7 +87,7 @@ public class NeoStore extends AbstractStore
         this.propStore = propStore;
         this.relStore = relStore;
         this.nodeStore = nodeStore;
-        REL_GRAB_SIZE = conf.getInteger( Configuration.relationship_grab_size );
+        REL_GRAB_SIZE = conf.get( Configuration.relationship_grab_size );
         this.txHook = txHook;
 
         /* [MP:2012-01-03] Fix for the problem in 1.5.M02 where store version got upgraded but
@@ -246,6 +246,7 @@ public class NeoStore extends AbstractStore
         {
             return;
         }
+        super.flushAll();
         relTypeStore.flushAll();
         propStore.flushAll();
         relStore.flushAll();
@@ -585,6 +586,16 @@ public class NeoStore extends AbstractStore
         list.addAll( relStore.getAllWindowPoolStats() );
         list.addAll( relTypeStore.getAllWindowPoolStats() );
         return list;
+    }
+
+    @Override
+    public void logAllWindowPoolStats( StringLogger.LineLogger logger )
+    {
+        super.logAllWindowPoolStats( logger );
+        nodeStore.logAllWindowPoolStats( logger );
+        relStore.logAllWindowPoolStats( logger );
+        relTypeStore.logAllWindowPoolStats( logger );
+        propStore.logAllWindowPoolStats( logger );
     }
 
     public boolean isStoreOk()

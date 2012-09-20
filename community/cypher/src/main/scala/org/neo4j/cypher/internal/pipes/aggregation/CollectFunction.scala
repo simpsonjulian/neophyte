@@ -20,7 +20,7 @@
 package org.neo4j.cypher.internal.pipes.aggregation
 
 import collection.mutable.ListBuffer
-import org.neo4j.cypher.internal.commands.Expression
+import org.neo4j.cypher.internal.commands.expressions.Expression
 import collection.Map
 
 
@@ -28,7 +28,10 @@ class CollectFunction(value:Expression) extends AggregationFunction {
   val collection = new ListBuffer[Any]()
 
   def apply(data: Map[String, Any]) {
-    collection += value(data)
+    val v = value(data)
+    if (v != null) {
+      collection += v
+    }
   }
 
   def result: Any = collection.toSeq

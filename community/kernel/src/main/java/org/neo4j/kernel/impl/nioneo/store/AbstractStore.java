@@ -181,7 +181,7 @@ public abstract class AbstractStore extends CommonAbstractStore
             long fileSize = fileChannel.size();
             int recordSize = getRecordSize();
             boolean fullRebuild = true;
-            if ( conf.getBoolean( Configuration.rebuild_idgenerators_fast) )
+            if ( (boolean) conf.get( Configuration.rebuild_idgenerators_fast ) )
             {
                 fullRebuild = false;
                 highId = findHighIdBackwards();
@@ -230,4 +230,9 @@ public abstract class AbstractStore extends CommonAbstractStore
     }
 
     public abstract List<WindowPoolStats> getAllWindowPoolStats();
+
+    public void logAllWindowPoolStats( StringLogger.LineLogger logger )
+    {
+        logger.logLine( getWindowPoolStats().toString() );
+    }
 }

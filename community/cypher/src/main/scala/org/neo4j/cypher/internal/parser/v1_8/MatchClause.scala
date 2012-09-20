@@ -20,6 +20,7 @@
 package org.neo4j.cypher.internal.parser.v1_8
 
 import org.neo4j.cypher.internal.commands._
+import expressions.{Identifier, Expression}
 
 trait MatchClause extends Base with ParserPattern {
   def matching: Parser[(Seq[Pattern], Seq[NamedPath])] = ignoreCase("match") ~> usePattern(matchTranslator) ^^ {
@@ -31,27 +32,41 @@ trait MatchClause extends Base with ParserPattern {
   }
 
   private def successIfEntities[T](l: Expression, r: Expression)(f: (String, String) => T): Maybe[T] = (l, r) match {
-    case (Entity(lName), Entity(rName)) => Yes(Seq(f(lName, rName)))
-    case (x, Entity(_)) => No(Seq("MATCH end points have to be node identifiers - found: " + x))
-    case (Entity(_), x) => No(Seq("MATCH end points have to be node identifiers - found: " + x))
+    case (Identifier(lName), Identifier(rName)) => Yes(Seq(f(lName, rName)))
+    case (x, Identifier(_)) => No(Seq("MATCH end points have to be node identifiers - found: " + x))
+    case (Identifier(_), x) => No(Seq("MATCH end points have to be node identifiers - found: " + x))
     case (x, y) => No(Seq("MATCH end points have to be node identifiers - found: " + x + " and " + y))
   }
 
   def matchTranslator(abstractPattern: AbstractPattern): Maybe[Any] = abstractPattern match {
-    case ParsedNamedPath(name, patterns) =>
-      val namedPathPatterns = patterns.map(matchTranslator)
-      val result = namedPathPatterns.reduce(_ ++ _)
-      result.seqMap(p => Seq(NamedPath(name, p.map(_.asInstanceOf[Pattern]):_*)))
+    case ParsedNamedPath(name, patterns) => parsedPath(name, patterns)
 
     case ParsedRelation(name, props, ParsedEntity(left, startProps, True()), ParsedEntity(right, endProps, True()), relType, dir, optional, predicate) =>
-      successIfEntities(left, right)((l, r) => RelatedTo(left = l, right = r, relName = name, relTypes = relType, direction = dir, optional = optional, predicate = True()))
+      if (props.isEmpty && startProps.isEmpty && endProps.isEmpty)
+        successIfEntities(left, right)((l, r) => RelatedTo(left = l, right = r, relName = name, relTypes = relType, direction = dir, optional = optional, predicate = True()))
+      else
+        No(Seq("Properties on pattern elements are not allowed in MATCH"))
 
     case ParsedVarLengthRelation(name, props, ParsedEntity(left, startProps, True()), ParsedEntity(right, endProps, True()), relType, dir, optional, predicate, min, max, relIterator) =>
+      if (props.isEmpty && startProps.isEmpty && endProps.isEmpty)
+        successIfEntities(left, right)((l, r) => RelatedTo(left = l, right = r, relName = name, relTypes = relType, direction = dir, optional = optional, predicate = True()))
+      else
+        No(Seq("Properties on pattern elements are not allowed in MATCH"))
       successIfEntities(left, right)((l, r) => VarLengthRelatedTo(pathName = name, start = l, end = r, minHops = min, maxHops = max, relTypes = relType, direction = dir, relIterator = relIterator, optional = optional, predicate = predicate))
 
     case ParsedShortestPath(name, props, ParsedEntity(left, startProps, True()), ParsedEntity(right, endProps, True()), relType, dir, optional, predicate, max, single, relIterator) =>
+      if (props.isEmpty && startProps.isEmpty && endProps.isEmpty)
+        successIfEntities(left, right)((l, r) => RelatedTo(left = l, right = r, relName = name, relTypes = relType, direction = dir, optional = optional, predicate = True()))
+      else
+        No(Seq("Properties on pattern elements are not allowed in MATCH"))
       successIfEntities(left, right)((l, r) => ShortestPath(pathName = name, start = l, end = r, relTypes = relType, dir = dir, maxDepth = max, optional = optional, single = single, relIterator = relIterator, predicate = predicate))
 
     case x => No(Seq("failed to parse MATCH pattern"))
+  }
+
+  private def parsedPath(name: String, patterns: Seq[AbstractPattern]): Maybe[NamedPath] = {
+    val namedPathPatterns = patterns.map(matchTranslator)
+    val result = namedPathPatterns.reduce(_ ++ _)
+    result.seqMap(p => Seq(NamedPath(name, p.map(_.asInstanceOf[Pattern]): _*)))
   }
 }

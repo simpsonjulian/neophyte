@@ -19,10 +19,6 @@
  */
 package org.neo4j.cypher.internal.symbols
 
-/**
- * TODO
- */
-
 object StringType
 {
   val instance = new StringType()
@@ -30,7 +26,10 @@ object StringType
   def apply() = instance
 }
 
-class StringType extends ScalarType
+class StringType extends ScalarType {
+  override def parentType:CypherType = ScalarType()
+  override def toString = "String"
+}
 
 
 

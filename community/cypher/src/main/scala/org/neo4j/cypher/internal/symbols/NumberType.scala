@@ -26,7 +26,10 @@ object NumberType {
   def apply(): NumberType = instance
 }
 
-class NumberType extends ScalarType
+class NumberType extends ScalarType {
+  override def parentType:CypherType = ScalarType()
+  override def toString = "Number"
+}
 
 
 

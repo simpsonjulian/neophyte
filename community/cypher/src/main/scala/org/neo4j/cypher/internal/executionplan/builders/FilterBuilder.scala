@@ -23,6 +23,7 @@ package org.neo4j.cypher.internal.executionplan.builders
 import org.neo4j.cypher.internal.commands.Predicate
 import org.neo4j.cypher.internal.pipes.{FilterPipe, Pipe}
 import org.neo4j.cypher.internal.executionplan.{ExecutionPlanInProgress, PlanBuilder}
+import org.neo4j.cypher.{CypherException, CypherTypeException, SyntaxException}
 
 class FilterBuilder extends PlanBuilder {
   def apply(plan: ExecutionPlanInProgress) = {
@@ -48,13 +49,12 @@ class FilterBuilder extends PlanBuilder {
     val unsolvedPredicates = querySoFar.where.filter(_.unsolved).map(_.token)
 
     unsolvedPredicates.
-      flatMap(pred => pipe.symbols.missingDependencies(pred.dependencies)).
-      map(_.name).distinct
+      flatMap(pred => pipe.symbols.missingSymbolTableDependencies(pred))
   }
 
   private def yesOrNo(q: QueryToken[_], p: Pipe) = q match {
-    case Unsolved(pred: Predicate) => p.symbols.satisfies(pred.dependencies)
-    case _ => false
+    case Unsolved(pred: Predicate) => pred.symbolDependenciesMet(p.symbols)
+    case _                         => false
   }
 
   def canWorkWith(plan: ExecutionPlanInProgress) = plan.query.where.exists(pred => yesOrNo(pred, plan.pipe))

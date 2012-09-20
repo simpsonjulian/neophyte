@@ -25,4 +25,7 @@ object BooleanType {
   def apply() = instance
 }
 
-class BooleanType extends ScalarType
+class BooleanType extends ScalarType {
+  override def parentType:CypherType = ScalarType()
+  override def toString = "Boolean"
+}

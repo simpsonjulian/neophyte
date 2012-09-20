@@ -1,3 +1,30 @@
+1.9
+--------------------
+o Refactored the type system from the bottom up
+o Predicates can now be returned and used to set properties
+o Fixes #797: CREATE UNIQUE now makes sure used identifiers have the same properties even if 
+  they are re-used without the properties
+
+1.8.RC1 (2012-09-05)
+--------------------
+o Removed the /../ literal for regular expressions. Now a normal string literal is used instead
+o Concatenation handles types better
+o Changed how the graph-matching module is used, to make it safe for concurrent use
+o Better type error messages
+o Renamed iterable to collection
+o Fixed #795: so that WITH keeps parameters also for empty aggregation results
+o Fixed #772: Creating nodes/relationships goes before SET, so SET can run on already created elements
+o Added error when using != instead of <>
+o Fixed #787: Issue when comparing array properties with literal collections
+o Fixed #751: Better error message for some type errors
+o Fixed #818: Problem where properties could only have scalar values (they can be arrays as well)
+o Fixed #834: Gives relevant syntax exception when properties are entered in MATCH
+
+1.8.M07 (2012-08-08)
+--------------------
+o Added escape characters to string literals
+o Renamed `RELATE` to `CREATE UNIQUE`
+
 1.8.M06 (2012-07-06)
 --------------------
 o Fixes problem when graph elements are deleted multiple times in the same query

@@ -30,22 +30,22 @@ class CollabFilteringTest extends DocumentingTestBase {
     "Bill knows Ian", "Sara knows Jill")
 
   def section = "cookbook"
+  override val noTitle = true;
 
   override protected def getGraphvizStyle: GraphStyle = {
     AsciiDocSimpleStyle.withAutomaticRelationshipTypeColors()
   }
-    
+
   @Test def basicCollborativeFiltering() {
     testQuery(
       title = "Simple Friend Finder",
-      text = """To find out the friends of Joes friends that are not already his friends, the query looks like this:""",
+      text = """To find out the friends of Joe's friends that are not already his friends, the query looks like this:""",
       queryText = "start joe=node:node_auto_index(name = \"Joe\") " +
-        "match joe-[:knows]->friend-[:knows]->friend_of_friend, " +
-        "joe-[r?:knows]->friend_of_friend " +
-        "where r IS NULL " +
+        "match joe-[:knows*2..2]-friend_of_friend " +
+        "where not(joe-[:knows]-friend_of_friend) " +
         "return friend_of_friend.name, COUNT(*) " +
         "order by COUNT(*) DESC, friend_of_friend.name",
-      returns = "This returns ae list of friends-of-friends ordered by the number of connections to them, and secondly by their name.",
+      returns = "This returns a list of friends-of-friends ordered by the number of connections to them, and secondly by their name.",
       assertions = (p) => assertEquals(List(
         Map("friend_of_friend.name" -> "Ian", "COUNT(*)" -> 2),
         Map("friend_of_friend.name" -> "Derrick", "COUNT(*)" -> 1),

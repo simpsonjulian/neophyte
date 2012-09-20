@@ -19,13 +19,13 @@
  */
 package org.neo4j.cypher.internal.commands
 
-import org.neo4j.cypher.internal.mutation.{RelateAction, RelateLink, UpdateAction}
-
+import org.neo4j.cypher.internal.mutation.{CreateUniqueAction, UniqueLink, UpdateAction}
+import expressions.{Expression, AggregationExpression}
 
 object Query {
   def start(startItems: StartItem*) = new QueryBuilder(startItems)
   def updates(cmds:UpdateAction*) = new QueryBuilder(Seq()).updates(cmds:_*)
-  def relate(cmds:RelateLink*) = new QueryBuilder(Seq()).updates(RelateAction(cmds:_*))
+  def unique(cmds:UniqueLink*) = new QueryBuilder(Seq(CreateUniqueAction(cmds:_*)))
 }
 
 case class Query(returns: Return,
@@ -71,13 +71,13 @@ order  : %s
 slice  : %s
 next   : %s
 """.format(
-  start.mkString,
-  updatedCommands.mkString,
+  start.mkString(","),
+  updatedCommands.mkString(","),
   matching,
   namedPaths,
   where,
   aggregation,
-  returns.returnItems.mkString,
+  returns.returnItems.mkString(","),
   sort,
   slice,
   tail

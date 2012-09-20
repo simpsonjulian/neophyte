@@ -23,6 +23,7 @@ import internal.StringExtras
 import org.scalatest.Assertions
 import org.junit.Assert._
 import org.junit.{Ignore, Test}
+import org.neo4j.graphdb.NotFoundException
 
 class ErrorMessagesTest extends ExecutionEngineHelper with Assertions with StringExtras {
   @Test def noReturnColumns() {
@@ -102,19 +103,19 @@ class ErrorMessagesTest extends ExecutionEngineHelper with Assertions with Strin
   @Test def badMatch5() {
     expectSyntaxError(
       "start p=node(2) match p[:likes]->dude return dude.name",
-      "failed to parse MATCH pattern", 23)
+      "failed to parse MATCH pattern", 24)
   }
 
   @Test def badMatch7() {
     expectSyntaxError(
       "start p=node(2) match p->dude return dude.name",
-      "expected [ or -", 24)
+      "failed to parse MATCH pattern", 24)
   }
 
   @Test def badMatch8() {
     expectSyntaxError(
       "start p=node(2) match p->dude return dude.name",
-      "expected [ or -", 24)
+      "failed to parse MATCH pattern", 24)
   }
 
   @Ignore @Test def missingComaBetweenColumns() {
@@ -178,14 +179,14 @@ class ErrorMessagesTest extends ExecutionEngineHelper with Assertions with Strin
       "These columns can't be listen in the WITH statement without renaming: count(*)")
   }
 
-  @Test def missing_relate_dependency_correctly_reported() {
+  @Test def missing_dependency_correctly_reported() {
     expectError(
-      "START a=node(0) RELATE a-[:KNOWS]->(b {name:missing}) RETURN b",
+      "START a=node(0) CREATE UNIQUE a-[:KNOWS]->(b {name:missing}) RETURN b",
       "Unknown identifier `missing`")
   }
 
   @Test def missing_create_dependency_correctly_reported() {
-    expectError(
+    expectNotFoundError(
       "START a=node(0) CREATE a-[:KNOWS]->(b {name:missing}) RETURN b",
       "Unknown identifier `missing`")
   }
@@ -196,9 +197,65 @@ class ErrorMessagesTest extends ExecutionEngineHelper with Assertions with Strin
       "Unknown identifier `missing`")
   }
 
+  @Test def create_with_identifier_already_existing() {
+    expectError(
+      "START a=node(0) CREATE a = {name:'foo'} RETURN a",
+      "Can't create `a` with properties here. It already exists in this context")
+  }
+
+  @Test def create_with_identifier_already_existing2() {
+    expectError(
+      "START a=node(0) CREATE UNIQUE (a {name:'foo'})-[:KNOWS]->() RETURN a",
+      "Can't create `a` with properties here. It already exists in this context")
+  }
+
+  @Test def type_of_identifier_is_wrong() {
+    expectError(
+      "start n=node(0) with [n] as users MATCH users-->messages RETURN messages",
+      "Expected `users` to be a Node but it was a Collection")
+  }
+
+  @Test def warn_about_exclamation_mark() {
+    expectError(
+      "start n=node(0) where n.foo != 2 return n",
+      "Cypher does not support != for inequality comparisons. It's used for nullable properties instead.\nYou probably meant <> instead. Read more about this in the operators chapter in the manual.")
+  }
+
+  @Test def warn_about_type_error() {
+    expectError(
+      "START p=node(0) MATCH p-[r*]->() WHERE r.foo = 'apa' RETURN r",
+      "Expected `r` to be a Map but it was a Collection")
+  }
+
+  @Test def error_when_using_properties_on_relationships_in_match() {
+    expectError(
+      "START p=node(0) MATCH p-[r {a:'foo'}]->() RETURN r",
+      "Properties on pattern elements are not allowed in MATCH")
+  }
+
+  @Test def error_when_using_properties_on_relationships_in_match2() {
+    expectError(
+      "START p=node(0) MATCH p-[r]->({a:'foo'}) RETURN r",
+      "Properties on pattern elements are not allowed in MATCH")
+  }
+
   private def expectError[T <: CypherException](query: String, expectedError: String)(implicit manifest: Manifest[T]): T = {
     val error = intercept[T](engine.execute(query).toList)
+    val s = """
+Wrong error message produced: %s
+Expected: %s
+     Got: %s
+            """.format(query, expectedError, error)
 
+    if(!error.getMessage.contains(expectedError)) {
+      fail(s)
+    }
+
+    error
+  }
+
+  private def expectNotFoundError(query: String, expectedError: String)  {
+    val error = intercept[NotFoundException](engine.execute(query).toList)
     val s = """
 Wrong error message produced: %s
 Expected: %s

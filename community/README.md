@@ -8,6 +8,10 @@ Neo4j is built using Maven - http://maven.apache.org/
 
 *Maven 3 is now supported*
 
+Contributing
+============
+
+For helping out improving Neo4j, check out [the intro on contributing code](http://docs.neo4j.org/chunked/milestone/community-contributing-code.html).
 
 Requirements
 ============
@@ -92,7 +96,7 @@ build the manual
 
 Build the standalone distributions
 
-    #git clone git@github.com:neo4j/packaging.git
+    git clone git@github.com:neo4j/packaging.git
     cd packaging
     git pull origin master
     cd standalone

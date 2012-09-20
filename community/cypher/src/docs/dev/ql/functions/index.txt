@@ -1,7 +1,7 @@
 [[query-function]]
 Functions
 =========
-Most functions in Cypher will return null if the input parameter is null.
+Most functions in Cypher will return +null+ if the input parameter is +null+.
 
 Here is a list of the functions in Cypher, seperated into three different sections: Predicates, Scalar functions and Aggregated functions
 
@@ -36,8 +36,8 @@ include::last.txt[]
 
 :leveloffset: 2
 
-== Iterable functions ==
-Iterable functions return an iterable of things - nodes in a path, and so on.
+== Collection functions ==
+Collection functions return collections of things -- nodes in a path, and so on.
 
 :leveloffset: 3
 

@@ -26,6 +26,7 @@ import java.util.Map;
 import java.util.Properties;
 import java.util.Timer;
 
+import org.neo4j.ext.udc.UdcSettings;
 import org.neo4j.graphdb.factory.GraphDatabaseSettings;
 import org.neo4j.helpers.Service;
 import org.neo4j.kernel.KernelData;
@@ -71,14 +72,14 @@ public class UdcExtensionImpl extends KernelExtension<UdcTimerTask>
 
         Config config = loadConfig(kernel);
 
-        if ( !config.getBoolean( GraphDatabaseSettings.udc_enabled )) return null;
+        if ( !config.get( UdcSettings.udc_enabled )) return null;
 
-        int firstDelay = config.getInteger( GraphDatabaseSettings.first_delay);
-        int interval = config.getInteger( GraphDatabaseSettings.interval );
-        String hostAddress = config.get( GraphDatabaseSettings.udc_host );
+        int firstDelay = config.get( UdcSettings.first_delay);
+        int interval = config.get( UdcSettings.interval );
+        String hostAddress = config.get( UdcSettings.udc_host );
 
-        UdcInformationCollector collector = new UdcInformationCollector(config, kernel);
-        UdcTimerTask task = new UdcTimerTask( hostAddress, collector.getStoreId(), collector.getCrashPing(), collector.getUdcParams());
+        UdcInformationCollector collector = new DefaultUdcInformationCollector(config, kernel);
+        UdcTimerTask task = new UdcTimerTask( hostAddress, collector);
         
         timer = new Timer( "Neo4j UDC Timer", /*isDaemon=*/true );
         timer.scheduleAtFixedRate( task, firstDelay, interval );
@@ -88,7 +89,7 @@ public class UdcExtensionImpl extends KernelExtension<UdcTimerTask>
 
     private Config loadConfig(KernelData kernel) {
         Properties udcProps = loadUdcProperties();
-        HashMap<String, String> config = new HashMap<String, String>(kernel.getConfigParams());
+        HashMap<String, String> config = new HashMap<String, String>(kernel.getConfig().getParams());
         for (Map.Entry<Object, Object> entry : udcProps.entrySet()) {
             config.put((String)entry.getKey(), (String) entry.getValue());
         }

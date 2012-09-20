@@ -133,7 +133,6 @@ public class XaLogicalLog implements LogLoader
 
     synchronized void open() throws IOException
     {
-        
         switch(logFiles.determineState()) 
         {
         case LEGACY_WITHOUT_LOG_ROTATION:
@@ -196,7 +195,7 @@ public class XaLogicalLog implements LogLoader
     private void open( String fileToOpen ) throws IOException
     {
         fileChannel = fileSystem.open( fileToOpen, "rw" );
-        if ( new XaLogicalLogRecoveryCheck(fileChannel).recoveryRequired() )
+        if ( new XaLogicalLogRecoveryCheck( fileChannel ).recoveryRequired() )
         {
             nonCleanShutdown = true;
             doingRecovery = true;
@@ -212,6 +211,21 @@ public class XaLogicalLog implements LogLoader
         else
         {
             logVersion = xaTf.getCurrentVersion();
+            
+            /* This is for compensating for that, during rotation, renaming the active log
+             * file and updating the log version via xaTf isn't atomic. First the file gets
+             * renamed and then the version is updated. If a crash occurs in between those
+             * two we need to detect and repair it the next startup...
+             * and here's the code for doing that. */
+            boolean logVersionChanged = false;
+            while ( fileSystem.fileExists( getFileName( logVersion ) ) )
+            {
+                logVersion++;
+                logVersionChanged = true;
+            }
+            if ( logVersionChanged )
+                xaTf.setVersion( logVersion );
+            
             long lastTxId = xaTf.getLastCommittedTx();
             LogIoUtils.writeLogHeader( sharedBuffer, logVersion, lastTxId );
             previousLogLastCommittedTx = lastTxId;
@@ -671,19 +685,6 @@ public class XaLogicalLog implements LogLoader
         }
     }
 
-    private void deleteLogFile( String logFileName ) throws IOException
-    {
-        if ( !fileSystem.fileExists( logFileName ) )
-        {
-            throw new IOException( "Logical log[" + logFileName +
-                "] not found" );
-        }
-        if ( !fileSystem.deleteFile( logFileName ) )
-        {
-            log.warning( "Unable to delete clean logical log[" + logFileName + "]" );
-        }
-    }
-
     private void releaseCurrentLogFile() throws IOException
     {
         if ( writeBuffer != null )
@@ -720,6 +721,7 @@ public class XaLogicalLog implements LogLoader
             setActiveLog( CLEAN );
         }
         
+        xaTf.flushAll();
         String activeLogFileName = fileName + "." + logWas;
         renameLogFileToRightVersion( activeLogFileName, endPosition );
         xaTf.getAndSetNewVersion();
@@ -767,6 +769,13 @@ public class XaLogicalLog implements LogLoader
             return;
         }
         logVersion = header[0];
+        
+        /* This is for compensating for that, during rotation, renaming the active log
+         * file and updating the log version via xaTf isn't atomic. First the file gets
+         * renamed and then the version is updated. If a crash occurs in between those
+         * two we need to detect and repair it the next startup */
+        xaTf.setVersion( logVersion );
+        
         long lastCommittedTx = header[1];
         previousLogLastCommittedTx = lastCommittedTx;
         positionCache.putHeader( logVersion, previousLogLastCommittedTx );
@@ -1009,7 +1018,8 @@ public class XaLogicalLog implements LogLoader
      * @return The channel
      * @throws IOException If an IO error occurs when reading the log file
      */
-    public ReadableByteChannel getLogicalLogOrMyselfCommitted( long version, long position )
+    @Override
+	public ReadableByteChannel getLogicalLogOrMyselfCommitted( long version, long position )
             throws IOException
     {
         synchronized ( this )
@@ -1582,7 +1592,8 @@ public class XaLogicalLog implements LogLoader
         return this.rotateAtSize;
     }
 
-    public String getFileName( long version )
+    @Override
+	public String getFileName( long version )
     {
         return fileName + ".v" + version;
     }
@@ -1630,7 +1641,8 @@ public class XaLogicalLog implements LogLoader
         return nonCleanShutdown;
     }
 
-    public long getHighestLogVersion()
+    @Override
+	public long getHighestLogVersion()
     {
         return logVersion;
     }

@@ -21,6 +21,8 @@
 package org.neo4j.index.impl.lucene;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertNotNull;
 
 import java.io.File;
 import java.util.Map;
@@ -145,5 +147,24 @@ public class TestRecovery
         LuceneDataSource ds = new LuceneDataSource( config, new IndexStore( getDbPath(), fileSystem ), fileSystem,
                                                    new XaFactory( config, TxIdGenerator.DEFAULT, new PlaceboTm(), new DefaultLogBufferFactory(), fileSystemAbstraction, StringLogger.DEV_NULL, RecoveryVerifier.ALWAYS_VALID, LogPruneStrategies.NO_PRUNING ));
         ds.close();
+    }
+
+    @Test
+    public void recoveryOnDeletedIndex() throws Exception
+    {
+        GraphDatabaseService db = newGraphDbService();
+        db.index().forNodes( "index" );
+        db.shutdown();
+
+        Process process = Runtime.getRuntime().exec( new String[]{
+            "java", "-cp", System.getProperty( "java.class.path" ),
+            AddThenDeleteInAnotherTxAndQuit.class.getName(), getDbPath()
+        } );
+        assertEquals( 0, new ProcessStreamHandler( process, true ).waitForResult() );
+        
+        db = new GraphDatabaseFactory().newEmbeddedDatabase( getDbPath() );
+        assertFalse( db.index().existsForNodes( "index" ) );
+        assertNotNull( db.index().forNodes( "index2" ).get( "key", "value" ).getSingle() );
+        db.shutdown();
     }
 }

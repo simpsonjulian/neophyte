@@ -20,7 +20,9 @@
 package org.neo4j.server.configuration;
 
 import java.io.File;
+import java.util.ArrayList;
 import java.util.Iterator;
+import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
@@ -29,6 +31,7 @@ import org.neo4j.helpers.collection.PrefetchingIterator;
 import org.neo4j.kernel.impl.util.StringLogger;
 import org.neo4j.kernel.info.DiagnosticsExtractor;
 import org.neo4j.kernel.info.DiagnosticsPhase;
+import org.neo4j.server.webadmin.rest.SessionFactoryImpl;
 
 public interface Configurator
 {
@@ -48,6 +51,7 @@ public interface Configurator
     String WEBSERVER_ADDRESS_PROPERTY_KEY = "org.neo4j.server.webserver.address";
     String WEBSERVER_MAX_THREADS_PROPERTY_KEY = "org.neo4j.server.webserver.maxthreads";
     String WEBSERVER_LIMIT_EXECUTION_TIME_PROPERTY_KEY = "org.neo4j.server.webserver.limit.executiontime";
+    String WEBSERVER_ENABLE_STATISTICS_COLLECTION = "org.neo4j.server.webserver.statistics";
 
     String REST_API_PATH_PROPERTY_KEY = "org.neo4j.server.webadmin.data.uri";
     String REST_API_PACKAGE = "org.neo4j.server.rest.web";
@@ -62,6 +66,14 @@ public interface Configurator
     String DEFAULT_WEB_ADMIN_PATH = "/webadmin";
 
     String RRDB_LOCATION_PROPERTY_KEY = "org.neo4j.server.webadmin.rrdb.location";
+    
+    String MANAGEMENT_CONSOLE_ENGINES = "org.neo4j.server.manage.console_engines";
+    List<String> DEFAULT_MANAGEMENT_CONSOLE_ENGINES = new ArrayList<String>(){
+        private static final long serialVersionUID = 6621747998288594121L;
+    {
+        add(SessionFactoryImpl.ConsoleEngineCreator.SHELL.name().toLowerCase());
+        add(SessionFactoryImpl.ConsoleEngineCreator.GREMLIN.name().toLowerCase());
+    }};
 
     String THIRD_PARTY_PACKAGES_KEY = "org.neo4j.server.thirdparty_jaxrs_classes";
     
@@ -81,8 +93,12 @@ public interface Configurator
     String DEFAULT_WEBSERVER_HTTPS_KEY_PATH = "neo4j-home/ssl/snakeoil.key";
 
     String HTTP_LOGGING = "org.neo4j.server.http.log.enabled";
+    boolean DEFAULT_HTTP_LOGGING = false;
     String HTTP_LOG_CONFIG_LOCATION = "org.neo4j.server.http.log.config";
     String WADL_ENABLED = "unsupported_wadl_generation_enabled";
+    
+	String STARTUP_TIMEOUT = "org.neo4j.server.startup_timeout";
+	int DEFAULT_STARTUP_TIMEOUT = 120;
 
     Configuration configuration();
 

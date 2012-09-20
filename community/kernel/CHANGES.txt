@@ -1,3 +1,22 @@
+1.8.RC1 (2012-09-05)
+--------------------
+o Removed contention around allocating and moving persistence windows so that a thread won't need to await
+  another thread doing this refresh, instead just continue knowing that the windows will be optimally
+  placed in a very near future.
+o Removed contention around translating a key (as String) into the ID by using copy-on-write map instead
+  of a concurrent hash map. Used in property key as well as relationship type translation.
+o Fix for Node/Relationship#getPropertyValues() sometimes returning null values from the iterator.
+o Important log messages from the transaction manager and the persistence window pool are now logged
+  to messages.log, rather than to java.util.logging.
+
+1.8.M07 (2012-08-08)
+--------------------
+o [DEPRECATION] Deprecated reference node. Indexes should be used for entry points in the graph
+o Traversal framework backwards compatibility
+  + Cleaned up any breaking changes
+  + Removed Expander#addFilter
+o Kernel JMX bean instance identifier is now reused and can optionally be set explicitly via forced_kernel_id config setting
+
 1.8.M06 (2012-07-06)
 --------------------
 o Deprecated AbstractGraphDatabase.transactionRunning()

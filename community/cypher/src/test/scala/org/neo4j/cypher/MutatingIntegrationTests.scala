@@ -87,9 +87,6 @@ class MutatingIntegrationTests extends ExecutionEngineHelper with Assertions wit
       nodesCreated = 1,
       propertiesSet = 1
     )
-
-    val txt = result.dumpToString()
-    println(txt)
   }
 
   @Test
@@ -401,13 +398,13 @@ return distinct center""")
 
   @Test
   def failed_query_should_not_leave_dangling_transactions() {
-    intercept[NotFoundException](parseAndExecute("START left=node(1), right=node(3,4) RELATE left-[r:KNOWS]->right RETURN r"))
+    intercept[NotFoundException](parseAndExecute("START left=node(1), right=node(3,4) CREATE UNIQUE left-[r:KNOWS]->right RETURN r"))
 
     assertNull("Did not expect to be in a transaction now", graph.getTxManager.getTransaction)
   }
 
   @Test
-  def relate_twice_with_param_map() {
+  def create_unique_twice_with_param_map() {
     createNode()
     createNode()
 
@@ -415,19 +412,28 @@ return distinct center""")
     val map2 = new HashMap[String, Any]()
     map2.put("name", "Anders")
 
-    val r1 = executeScalar[Relationship]("start a=node(1), b=node(2) relate a-[r:FOO {param}]->b return r", "param" -> map1)
-    val r2 = executeScalar[Relationship]("start a=node(1), b=node(2) relate a-[r:FOO {param}]->b return r", "param" -> map2)
+    val r1 = executeScalar[Relationship]("start a=node(1), b=node(2) create unique a-[r:FOO {param}]->b return r", "param" -> map1)
+    val r2 = executeScalar[Relationship]("start a=node(1), b=node(2) create unique a-[r:FOO {param}]->b return r", "param" -> map2)
 
     assert(r1 === r2)
   }
+  @Test
+  def create_unique_relationship_and_use_created_identifier_in_set() {
+    createNode()
+    createNode()
+
+    val r1 = executeScalar[Relationship]("start a=node(1), b=node(2) create unique a-[r:FOO]->b set r.foo = 'bar' return r")
+
+    assert("bar" === r1.getProperty("foo"))
+  }
 
   @Test
-  def relate_twice_with_array_prop() {
+  def create_unique_twice_with_array_prop() {
     createNode()
     createNode()
 
-    parseAndExecute("start a=node(1) relate a-[:X]->({foo:[1,2,3]})")
-    val result = parseAndExecute("start a=node(1) relate a-[:X]->({foo:[1,2,3]})")
+    parseAndExecute("start a=node(1) create unique a-[:X]->({foo:[1,2,3]})")
+    val result = parseAndExecute("start a=node(1) create unique a-[:X]->({foo:[1,2,3]})")
 
     assertFalse("Should not have created node", result.queryStatistics().containsUpdates)
   }
@@ -460,13 +466,18 @@ return distinct center""")
   }
 
   @Test
-  def related_paths_honor_directions() {
+  def create_unique_paths_honor_directions() {
     val a = createNode()
     val b = createNode()
-    val result = parseAndExecute("start a=node(1), b=node(2) relate p = a<-[:X]-b return p").toList.head("p").asInstanceOf[Path]
+    val result = parseAndExecute("start a=node(1), b=node(2) create unique p = a<-[:X]-b return p").toList.head("p").asInstanceOf[Path]
 
     assert(result.startNode() === a)
     assert(result.endNode() === b)
+  }
+
+  @Test
+  def create_with_parameters_is_not_ok_when_identifier_already_exists() {
+    intercept[SyntaxException](parseAndExecute("create a with a create (a {name:\"Foo\"})-[:BAR]->()").toList)
   }
 
   @Test
@@ -475,9 +486,26 @@ return distinct center""")
     try {
       parseAndExecute("start a=node({id}) set a.foo = 'bar' return a","id"->"0")
     } catch {
-      case _ => tx.failure()
+      case _: Throwable => tx.failure()
     }
     finally tx.finish()
+  }
+
+  @Test
+  def create_two_rels_in_one_command_should_work() {
+    val result = parseAndExecute("create (a{name:'a'})-[:test]->b, a-[:test2]->c")
+
+    assertStats(result, nodesCreated = 3, relationshipsCreated = 2, propertiesSet = 1)
+  }
+
+  @Test
+  def cant_set_properties_after_node_is_already_created() {
+    intercept[SyntaxException](parseAndExecute("create a-[:test]->b, (a {name:'a'})-[:test2]->c"))
+  }
+
+  @Test
+  def cant_set_properties_after_node_is_already_created2() {
+    intercept[SyntaxException](parseAndExecute("create a-[:test]->b create unique (a {name:'a'})-[:test2]->c"))
   }
 }
 trait StatisticsChecker extends Assertions {
