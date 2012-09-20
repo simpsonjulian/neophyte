@@ -12,12 +12,12 @@ It features:
 * high speed querying through traversals
 
 Proper ACID behavior is the foundation of data reliability.
-Neo4j enforces that all mutating operations occur within a transaction, guaranteeing consistent data.
+Neo4j enforces that all operations that modify data occur within a transaction, guaranteeing consistent data.
 This robustness extends from single instance embedded graphs to multi-server high availability installations.
 For details, see <<transactions>>.
 
 Reliable graph storage can easily be added to any application.
-A property graph can scale in size and complexity as the application evolves, with little impact on performance.
+A graph can scale in size and complexity as the application evolves, with little impact on performance.
 Whether starting new development, or augmenting existing functionality, Neo4j is only limited by physical hardware.
 
 A single server instance can handle a graph of billions of nodes and relationships.
