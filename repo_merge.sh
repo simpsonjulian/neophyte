@@ -49,18 +49,3 @@ for branch in $BRANCHES; do
     merge_branch $project $branch
   done
 done
-exit 0 
-
-# Step 1: merge the master
-#for project in community advanced enterprise manual packaging; do 
-#  merge_branch $project master
-#done
-
-branch=$1
-die() {
-  echo $1 && exit 1
-}
-[ -n "$branch" ] || die 'I need a branch'
-git remote  | while read remote; do 
-  git pull -s subtree $remote $branch
-done
