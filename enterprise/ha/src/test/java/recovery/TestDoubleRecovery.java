@@ -31,7 +31,6 @@ import java.util.concurrent.CountDownLatch;
 
 import javax.transaction.xa.Xid;
 
-import org.junit.Ignore;
 import org.junit.Test;
 import org.neo4j.backup.OnlineBackup;
 import org.neo4j.backup.OnlineBackupSettings;
@@ -43,7 +42,6 @@ import org.neo4j.graphdb.index.Index;
 import org.neo4j.helpers.UTF8;
 import org.neo4j.helpers.collection.MapUtil;
 import org.neo4j.index.impl.lucene.LuceneDataSource;
-import org.neo4j.kernel.InternalAbstractGraphDatabase;
 import org.neo4j.kernel.DefaultFileSystemAbstraction;
 import org.neo4j.kernel.EmbeddedGraphDatabase;
 import org.neo4j.kernel.GraphDatabaseAPI;
@@ -72,7 +70,6 @@ public class TestDoubleRecovery extends AbstractSubProcessTestBase
      * Also do an incremental backup just to make sure that the logs have gotten the
      * right records injected.
      */
-    @Ignore( "TODO Broken since the assembly merge. Please fix" )
     @Test
     public void crashAfter2PCMarkAsCommittingThenCrashAgainAndRecover() throws Exception
     {
@@ -188,7 +185,7 @@ public class TestDoubleRecovery extends AbstractSubProcessTestBase
         }
     }
 
-    private final BreakPoint ON_CRASH = new BreakPoint( Crash.class, "run", InternalAbstractGraphDatabase.class )
+    private final BreakPoint ON_CRASH = new BreakPoint( Crash.class, "run", GraphDatabaseAPI.class )
     {
         @Override
         protected void callback( DebugInterface debug ) throws KillSubProcess

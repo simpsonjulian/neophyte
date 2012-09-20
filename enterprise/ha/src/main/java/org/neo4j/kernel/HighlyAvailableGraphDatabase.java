@@ -49,6 +49,7 @@ import org.neo4j.com.RequestContext.Tx;
 import org.neo4j.com.Response;
 import org.neo4j.com.ServerUtil;
 import org.neo4j.com.ToFileStoreWriter;
+import org.neo4j.graphdb.DependencyResolver;
 import org.neo4j.graphdb.GraphDatabaseService;
 import org.neo4j.graphdb.Node;
 import org.neo4j.graphdb.Relationship;
@@ -71,15 +72,19 @@ import org.neo4j.kernel.ha.BranchedDataException;
 import org.neo4j.kernel.ha.Broker;
 import org.neo4j.kernel.ha.ClusterClient;
 import org.neo4j.kernel.ha.ClusterEventReceiver;
+import org.neo4j.kernel.ha.DatabaseNotRunningException;
 import org.neo4j.kernel.ha.HaCaches;
 import org.neo4j.kernel.ha.HaSettings;
+import org.neo4j.kernel.ha.KnownReevaluationCauses;
 import org.neo4j.kernel.ha.Master;
 import org.neo4j.kernel.ha.MasterClientResolver;
 import org.neo4j.kernel.ha.MasterGraphDatabase;
 import org.neo4j.kernel.ha.MasterServer;
+import org.neo4j.kernel.ha.ReevaluationCause;
 import org.neo4j.kernel.ha.SlaveDatabaseOperations;
 import org.neo4j.kernel.ha.SlaveGraphDatabase;
 import org.neo4j.kernel.ha.SlaveServer;
+import org.neo4j.kernel.ha.UnknownReevaluationCause;
 import org.neo4j.kernel.ha.shell.ZooClientFactory;
 import org.neo4j.kernel.ha.zookeeper.Machine;
 import org.neo4j.kernel.ha.zookeeper.NoMasterException;
@@ -175,6 +180,27 @@ public class HighlyAvailableGraphDatabase
             new CopyOnWriteArraySet<TransactionEventHandler<?>>();
     protected final FileSystemAbstraction fileSystemAbstraction;
 
+    // TODO: This should extend or delegate to the DR that exists in {@link InternalAbstractGraphDatabase}
+    // The idea is to replace getXX-type dependency resolution methods with this.
+    private DependencyResolver haDependencyResolver = new DependencyResolver()
+    {
+        @Override
+        public <T> T resolveDependency( Class<T> type ) throws IllegalArgumentException
+        {
+            if(type.equals( MasterGraphDatabase.class ) && internalGraphDatabase instanceof MasterGraphDatabase)
+            {
+                return (T) internalGraphDatabase;
+            } else if(type.equals( SlaveGraphDatabase.class ) && internalGraphDatabase instanceof SlaveGraphDatabase)
+            {
+                return (T) internalGraphDatabase;
+            }
+            else
+            {
+                throw new IllegalArgumentException( "Could not resolve dependency of type:" + type.getName() );
+            }
+        }
+    };
+
     /**
      * Default IndexProviders and KernelExtensions by calling Service.load
      *
@@ -233,16 +259,17 @@ public class HighlyAvailableGraphDatabase
         kernelEventHandlers.add( new TxManagerCheckKernelEventHandler() );
 
         this.slaveUpdateMode = configuration.getEnum( SlaveUpdateMode.class, HaSettings.slave_coordinator_update_mode );
-        this.machineId = configuration.getInteger( HaSettings.server_id );
+        this.machineId = configuration.get( HaSettings.server_id );
         this.branchedDataPolicy = configuration.getEnum( BranchedDataPolicy.class, HaSettings.branched_data_policy );
-        this.localGraphWait = configuration.getInteger( HaSettings.read_timeout );
+        this.localGraphWait = configuration.get( HaSettings.read_timeout );
 
         this.masterClientResolver = new MasterClientResolver(
                 messageLog,
-                configuration.getInteger( HaSettings.read_timeout ),
-                configuration.isSet( HaSettings.lock_read_timeout ) ? configuration.getInteger( HaSettings.lock_read_timeout )
-                        : configuration.getInteger( HaSettings.read_timeout ),
-                configuration.getInteger( HaSettings.max_concurrent_channels_per_slave ) );
+                configuration.get( HaSettings.read_timeout ),
+                configuration.isSet( HaSettings.lock_read_timeout ) ? configuration.get( HaSettings.lock_read_timeout )
+                        : configuration.get( HaSettings.read_timeout ),
+                configuration.get( HaSettings.max_concurrent_channels_per_slave ),
+                configuration.get( HaSettings.com_chunk_size ) );
         masterClientResolver.getDefault();
         // TODO The dependency from BrokerFactory to 'this' is completely
         // broken. Needs rethinking
@@ -450,7 +477,7 @@ public class HighlyAvailableGraphDatabase
             Pair<Master, Machine> master = createClusterClient().getMasterClient();
 
             // Assume it's shut down at this point
-            internalShutdown( false );
+            internalShutdown( KnownReevaluationCauses.COPY_STORE_FROM_MASTER, false );
 
             if ( branched )
             {
@@ -541,7 +568,7 @@ public class HighlyAvailableGraphDatabase
     void makeWayForNewDb()
     {
         this.messageLog.logMessage( "Cleaning database " + storeDir + " (" + branchedDataPolicy.name() +
-                                         ") to make way for new db from master" );
+                ") to make way for new db from master" );
         branchedDataPolicy.handle( this );
     }
 
@@ -595,8 +622,9 @@ public class HighlyAvailableGraphDatabase
             }
         }
         storeId = broker.getClusterStoreId( true );
-        newMaster( new InformativeStackTrace( "Starting up [" + machineId + "] for the first time" ) );
+        newMaster( KnownReevaluationCauses.INITIAL_STARTUP );
         localGraph();
+        masterClientResolver.enableDowngradeBarrier();
     }
 
     private void checkAndRecoverCorruptLogs( InternalAbstractGraphDatabase localDb,
@@ -825,12 +853,12 @@ public class HighlyAvailableGraphDatabase
 
         if ( causeOfShutdown != null )
         {
-            throw new RuntimeException( "Graph database not started", causeOfShutdown );
+            throw new DatabaseNotRunningException( "Graph database not started", causeOfShutdown );
         }
         else
         {
-            throw new RuntimeException( "Graph database not assigned and no cause of shutdown, " +
-                    "maybe not started yet or in the middle of master/slave swap?" );
+            throw new DatabaseNotRunningException( "Graph database not assigned and no cause of shutdown, " +
+                    "maybe not started yet or in the middle of master/slave swap?", null );
         }
     }
 
@@ -854,13 +882,11 @@ public class HighlyAvailableGraphDatabase
                      */
                     messageLog.logMessage(
                             "ZooKeeper broker returned null master" );
-                    newMaster( new NullPointerException(
-                            "master returned from broker" ) );
+                    newMaster( KnownReevaluationCauses.NO_MASTER_IN_PULL_UPDATES );
                 }
                 else if ( broker.getMaster().first() == null )
                 {
-                    newMaster( new NullPointerException(
-                            "master returned from broker" ) );
+                    newMaster( KnownReevaluationCauses.NO_MASTER_IN_PULL_UPDATES );
                 }
 
                 RequestContext slaveContext = null;
@@ -887,12 +913,12 @@ public class HighlyAvailableGraphDatabase
         }
         catch ( ZooKeeperException e )
         {
-            newMaster( e );
+            newMaster( UnknownReevaluationCause.fromException( e ) );
             throw e;
         }
         catch ( NoMasterException e )
         {
-            newMaster( e );
+            newMaster( UnknownReevaluationCause.fromException( e ) );
             throw e;
         }
         catch ( ComException e )
@@ -931,6 +957,7 @@ public class HighlyAvailableGraphDatabase
         return localGraph().transactionRunning();
     }
 
+    @Override
     public final <T> T getManagementBean( Class<T> type )
     {
         return localGraph().getManagementBean( type );
@@ -949,14 +976,16 @@ public class HighlyAvailableGraphDatabase
         getMessageLog().logMessage( "ReevaluateMyself: machineId=" + machineId + " with master[" + master +
                 "] (I am master=" + iAmCurrentlyMaster + ", " + internalGraphDatabase + ")" );
         pullUpdates = false;
+        boolean firstReevaluation = this.internalGraphDatabase == null;
         InternalAbstractGraphDatabase newDb = null;
         try
         {
             if ( master.other().getMachineId() == machineId )
             { // I am the new master
-                if ( this.internalGraphDatabase == null || !iAmCurrentlyMaster )
+                if ( firstReevaluation|| !iAmCurrentlyMaster )
                 { // I am currently a slave, so restart as master
-                    internalShutdown( true );
+                    internalShutdown( firstReevaluation ? KnownReevaluationCauses.STARTING_AS_MASTER :
+                        KnownReevaluationCauses.SWITCHING_FROM_SLAVE_TO_MASTER, true );
                     newDb = startAsMaster();
                 }
                 // fire rebound event
@@ -965,10 +994,11 @@ public class HighlyAvailableGraphDatabase
             else
             { // Someone else is master
                 broker.notifyMasterChange( master.other() );
-                if ( this.internalGraphDatabase == null || iAmCurrentlyMaster )
+                if ( firstReevaluation || iAmCurrentlyMaster )
                 { // I am currently master, so restart as slave.
                     // This will result in clearing of free ids from .id files, see SlaveIdGenerator.
-                    internalShutdown( true );
+                    internalShutdown( firstReevaluation ? KnownReevaluationCauses.STARTING_AS_SLAVE :
+                        KnownReevaluationCauses.SWITCHING_FROM_MASTER_TO_SLAVE, true );
                     newDb = startAsSlave();
                 }
                 else
@@ -1051,7 +1081,16 @@ public class HighlyAvailableGraphDatabase
         return slaveGraphDatabase;
     }
 
-    private InternalAbstractGraphDatabase startAsMaster()
+    // Note: Made this protected in order to write tests that can provide modified versions of MasterGraphDatabase.
+    // Specifically, I need to write a test that verifies that internalShutdown does not leak references to GDB's it
+    // is about to call shutdown on (which I think it does). I can either use the breakpoint approach, or provide
+    // a modified implementation here.
+    // Opted for this b/c it appeared that it will be easier to follow for others (since it does not require multiple
+    // processes and gives compilation errors that are easy to debug). However, it sucks to open up stuff like this for
+    // testing. This seems to be an artifact of architecture problems. I'm not sure quite what the issue is though, or
+    // how to resolve it. Would love to discuss.
+    // /jake
+    protected InternalAbstractGraphDatabase startAsMaster()
     {
         messageLog.logMessage( "Starting[" + machineId + "] as master", true );
 
@@ -1190,9 +1229,9 @@ public class HighlyAvailableGraphDatabase
         return localGraph().tx();
     }
 
-    public synchronized void internalShutdown( boolean rotateLogs )
+    public synchronized void internalShutdown( ReevaluationCause cause, boolean rotateLogs )
     {
-        messageLog.logMessage( "Internal shutdown of HA db[" + machineId + "] reference=" + this + ", masterServer=" + masterServer, new InformativeStackTrace( "Internal shutdown" ), true );
+        cause.log( messageLog, "Internal shutdown of HA db[" + machineId + "]" );
         pullUpdates = false;
         if ( this.updatePuller != null )
         {
@@ -1230,14 +1269,20 @@ public class HighlyAvailableGraphDatabase
         }
         if ( this.internalGraphDatabase != null )
         {
+            // User-level calls to the database will check if internalGraphDatabase is null,
+            // and block until the field has been populated again if so. Therefore, set it to null
+            // ASAP to block external calls. Keep a local reference to do shutdown work.
+            InternalAbstractGraphDatabase localRefToInternalDb = internalGraphDatabase;
+            this.internalGraphDatabase = null;
+
             if ( rotateLogs )
             {
-                internalGraphDatabase.getXaDataSourceManager().rotateLogicalLogs();
+                localRefToInternalDb.getXaDataSourceManager().rotateLogicalLogs();
             }
+
             messageLog.logMessage( "Internal shutdown localGraph", true );
-            this.internalGraphDatabase.shutdown();
+            localRefToInternalDb.shutdown();
             messageLog.logMessage( "Internal shutdown localGraph DONE", true );
-            this.internalGraphDatabase = null;
         }
         messageLog.flush();
     }
@@ -1250,7 +1295,7 @@ public class HighlyAvailableGraphDatabase
         {
             this.broker.shutdown();
         }
-        internalShutdown( false );
+        internalShutdown( KnownReevaluationCauses.SHUTDOWN, false );
 
         life.shutdown();
     }
@@ -1302,25 +1347,16 @@ public class HighlyAvailableGraphDatabase
         }
     }
 
-    private synchronized void newMaster( Exception e )
+    private synchronized void newMaster( ReevaluationCause cause )
     {
-        /* MP: This is from BranchDetectingTxVerifier which can report branched data via a
-         * BranchedDataException embedded inside a ComException (just to pass through the usual
-         * code paths w/o any additional code). Feel free to refactor to get rid of this packing */
-        if ( e instanceof ComException && e.getCause() instanceof BranchedDataException )
-        {
-            BranchedDataException bde = (BranchedDataException) e.getCause();
-            getMessageLog().logMessage( "Master says I've got branched data: " + bde );
-        }
-
-        Throwable cause = null;
+        Throwable causeOfFailure = null;
         int i = 0;
         boolean unexpectedException = false;
         while ( i++ < NEW_MASTER_STARTUP_RETRIES )
         {
             try
             {
-                getMessageLog().logMessage( "newMaster called", e, true );
+                cause.log( messageLog, "newMaster called" );
                 reevaluateMyself();
                 return;
             }
@@ -1328,8 +1364,7 @@ public class HighlyAvailableGraphDatabase
             {
                 getMessageLog().logMessage(
                         "ZooKeeper exception in newMaster, retry #" + i, zke );
-                e = zke;
-                cause = zke;
+                causeOfFailure = zke;
                 sleepWithoutInterruption( 500, "" );
                 continue;
             }
@@ -1337,46 +1372,41 @@ public class HighlyAvailableGraphDatabase
             {
                 getMessageLog().logMessage(
                         "Got wrong protocol version during newMaster, expected " + pe.getExpected() + " but got "
-                                + pe.getReceived(), e );
+                                + pe.getReceived(), pe );
                 broker.restart();
-                e = pe;
-                cause = pe;
+                causeOfFailure = pe;
                 continue;
             }
             catch ( ComException ce )
             {
                 getMessageLog().logMessage(
                         "Communication exception in newMaster, retry #" + i, ce );
-                e = ce;
-                cause = ce;
+                causeOfFailure = ce;
                 sleepWithoutInterruption( 500, "" );
                 continue;
             }
             catch ( BranchedDataException bde )
             {
                 getMessageLog().logMessage(
-                        "Branched data occurred, during newMaster retry #" + i,
-                        bde );
+                        "Branched data occurred, during newMaster retry #" + i, bde );
                 getFreshDatabaseFromMaster( true /*branched*/);
-                e = bde;
-                cause = bde;
+                causeOfFailure = bde;
                 continue;
             }
             catch ( Throwable t )
             {
-                cause = t;
+                causeOfFailure = t;
                 unexpectedException = true;
                 break;
             }
         }
-        if ( cause != null && unexpectedException )
+        if ( causeOfFailure != null && unexpectedException )
         {
             getMessageLog().logMessage(
-                    "Reevaluation ended in unknown exception " + cause
-                    + " so shutting down", cause, true );
-            shutdown( cause, false );
+                    "Reevaluation ended in unknown exception so shutting down", causeOfFailure, true );
+            shutdown( causeOfFailure, false );
         }
-        throw Exceptions.launderedException( cause );
+        throw Exceptions.launderedException( causeOfFailure );
     }
 
     public MasterServer getMasterServerIfMaster()
@@ -1424,7 +1454,13 @@ public class HighlyAvailableGraphDatabase
     {
         return storeDir;
     }
-    
+
+    // To replace all getXX-style dependency resolution methods.
+    public DependencyResolver getDependencyResolver()
+    {
+        return haDependencyResolver;
+    }
+
     @Override
     public KernelPanicEventGenerator getKernelPanicGenerator()
     {
@@ -1616,7 +1652,7 @@ public class HighlyAvailableGraphDatabase
             }
             catch ( IOException e )
             {
-                newMaster( e );
+                newMaster( UnknownReevaluationCause.fromException( e ) );
                 throw new RuntimeException( e );
             }
             finally
@@ -1628,7 +1664,7 @@ public class HighlyAvailableGraphDatabase
         @Override
         public void handle( Exception e )
         {
-            newMaster( e );
+            newMaster( UnknownReevaluationCause.fromException( e ) );
         }
 
         @Override
@@ -1636,15 +1672,15 @@ public class HighlyAvailableGraphDatabase
         {
             if ( e instanceof ZooKeeperException || e instanceof ComException )
             {
-                slaveOperations.newMaster( e );
+                slaveOperations.newMaster( UnknownReevaluationCause.fromException( e ) );
                 throw e;
             }
         }
 
         @Override
-        public void newMaster( Exception e )
+        public void newMaster( ReevaluationCause cause )
         {
-            HighlyAvailableGraphDatabase.this.newMaster( e );
+            HighlyAvailableGraphDatabase.this.newMaster( cause );
         }
 
         /**
@@ -1655,13 +1691,13 @@ public class HighlyAvailableGraphDatabase
          * ZK ended up in during our absence is respected.
          */
         @Override
-        public synchronized void reconnect( Exception e )
+        public synchronized void reconnect( ReevaluationCause cause )
         {
             if ( broker != null )
             {
                 broker.restart();
             }
-            newMaster( e );
+            newMaster( cause );
         }
 
         @Override
@@ -1692,8 +1728,8 @@ public class HighlyAvailableGraphDatabase
             if( error == ErrorState.TX_MANAGER_NOT_OK )
             {
                 messageLog.logMessage( "TxManager not ok, doing internal restart" );
-                internalShutdown( true );
-                newMaster( new InformativeStackTrace( "Tx manager not ok" ) );
+                internalShutdown( KnownReevaluationCauses.KERNEL_PANIC, true );
+                newMaster( KnownReevaluationCauses.KERNEL_PANIC );
             }
         }
 

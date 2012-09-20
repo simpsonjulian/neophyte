@@ -21,6 +21,7 @@
 package org.neo4j.kernel.ha.zookeeper;
 
 import static org.junit.Assert.fail;
+import static org.neo4j.com.Protocol.DEFAULT_FRAME_LENGTH;
 
 import java.util.HashMap;
 import java.util.Map;
@@ -35,6 +36,7 @@ import org.neo4j.kernel.configuration.ConfigurationDefaults;
 import org.neo4j.kernel.ha.ClusterEventReceiver;
 import org.neo4j.kernel.ha.HaSettings;
 import org.neo4j.kernel.ha.MasterClientResolver;
+import org.neo4j.kernel.ha.ReevaluationCause;
 import org.neo4j.kernel.impl.util.StringLogger;
 import org.neo4j.test.ha.LocalhostZooKeeperCluster;
 
@@ -43,15 +45,15 @@ public class TestZooClient
     private static final ClusterEventReceiver DummyClusterReceiver = new ClusterEventReceiver()
     {
         @Override
-        public void reconnect( Exception cause )
+        public void reconnect( ReevaluationCause cause )
         {
-            StringLogger.SYSTEM.logMessage( "reconnect called", cause );
+            cause.log( StringLogger.SYSTEM, "reconnect called" );
         }
 
         @Override
-        public void newMaster( Exception cause )
+        public void newMaster( ReevaluationCause cause )
         {
-            StringLogger.SYSTEM.logMessage( "newMaster called", cause );
+            cause.log( StringLogger.SYSTEM, "newMaster called" );
         }
     };
 
@@ -68,7 +70,7 @@ public class TestZooClient
         ZooClient client = new ZooClient( "", StringLogger.SYSTEM, config, null, DummyClusterReceiver,
                 new MasterClientResolver.F18( StringLogger.SYSTEM, Client.DEFAULT_READ_RESPONSE_TIMEOUT_SECONDS,
                         Client.DEFAULT_READ_RESPONSE_TIMEOUT_SECONDS,
-                        Client.DEFAULT_MAX_NUMBER_OF_CONCURRENT_CHANNELS_PER_CLIENT ) );
+                        Client.DEFAULT_MAX_NUMBER_OF_CONCURRENT_CHANNELS_PER_CLIENT, DEFAULT_FRAME_LENGTH ) );
 
         final AtomicBoolean stop = new AtomicBoolean( false );
         Thread launchesZK = new Thread( new Runnable()
@@ -123,7 +125,7 @@ public class TestZooClient
         ZooClient client = new ZooClient( "", StringLogger.SYSTEM, config, null, DummyClusterReceiver,
                 new MasterClientResolver.F18( StringLogger.SYSTEM, Client.DEFAULT_READ_RESPONSE_TIMEOUT_SECONDS,
                         Client.DEFAULT_READ_RESPONSE_TIMEOUT_SECONDS,
-                        Client.DEFAULT_MAX_NUMBER_OF_CONCURRENT_CHANNELS_PER_CLIENT ) );
+                        Client.DEFAULT_MAX_NUMBER_OF_CONCURRENT_CHANNELS_PER_CLIENT, DEFAULT_FRAME_LENGTH ) );
 
         final Thread me = Thread.currentThread();
         final AtomicBoolean allOk = new AtomicBoolean( false );

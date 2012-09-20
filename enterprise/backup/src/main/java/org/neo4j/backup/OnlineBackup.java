@@ -21,7 +21,6 @@
 package org.neo4j.backup;
 
 import static org.neo4j.helpers.collection.MapUtil.stringMap;
-import static org.neo4j.kernel.impl.util.StringLogger.SYSTEM;
 
 import java.io.File;
 import java.io.FilenameFilter;
@@ -53,18 +52,12 @@ import org.neo4j.graphdb.factory.GraphDatabaseSetting;
 import org.neo4j.graphdb.factory.GraphDatabaseSettings;
 import org.neo4j.helpers.ProgressIndicator;
 import org.neo4j.helpers.Triplet;
-import org.neo4j.kernel.DefaultFileSystemAbstraction;
-import org.neo4j.kernel.DefaultIdGeneratorFactory;
-import org.neo4j.kernel.DefaultLastCommittedTxIdSetter;
-import org.neo4j.kernel.DefaultTxHook;
 import org.neo4j.kernel.EmbeddedGraphDatabase;
 import org.neo4j.kernel.GraphDatabaseAPI;
 import org.neo4j.kernel.configuration.Config;
 import org.neo4j.kernel.configuration.ConfigParam;
 import org.neo4j.kernel.configuration.ConfigurationDefaults;
 import org.neo4j.kernel.impl.nioneo.store.NeoStore;
-import org.neo4j.kernel.impl.nioneo.store.StoreAccess;
-import org.neo4j.kernel.impl.nioneo.store.StoreFactory;
 import org.neo4j.kernel.impl.transaction.XaDataSourceManager;
 import org.neo4j.kernel.impl.transaction.xaframework.LogIoUtils;
 import org.neo4j.kernel.impl.transaction.xaframework.NoSuchLogVersionException;
@@ -213,18 +206,9 @@ public class OnlineBackup
             bumpLogFile( targetDirectory, timestamp );
             if ( verification )
             {
-                StoreFactory factory = new StoreFactory( new Config( new ConfigurationDefaults(GraphDatabaseSettings.class ).apply( stringMap() )), new DefaultIdGeneratorFactory(),
-                        new DefaultFileSystemAbstraction(), new DefaultLastCommittedTxIdSetter(), SYSTEM, new DefaultTxHook() );
-                NeoStore neoStore = factory.newNeoStore( new File( targetDirectory, NeoStore.DEFAULT_NAME ).getAbsolutePath() );
-                try
-                {
-                    StoreAccess store = new StoreAccess( neoStore );
-                    ConsistencyCheck.run( store, false );
-                }
-                finally
-                {
-                    neoStore.close();
-                }
+                ConsistencyCheck.run( targetDirectory,
+                                      new Config( new ConfigurationDefaults( GraphDatabaseSettings.class )
+                                                          .apply( stringMap() ) ) );
             }
         }
         finally

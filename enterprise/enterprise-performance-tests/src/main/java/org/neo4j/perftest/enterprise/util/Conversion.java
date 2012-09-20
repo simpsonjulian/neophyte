@@ -17,18 +17,18 @@
  * You should have received a copy of the GNU Affero General Public License
  * along with this program. If not, see <http://www.gnu.org/licenses/>.
  */
-package org.neo4j.kernel;
+package org.neo4j.perftest.enterprise.util;
 
-/**
- * Preferably used when there's a place where you'd like to capture the call path leading up
- * to a certain point.
- * 
- * @author Mattias Persson
- */
-public class InformativeStackTrace extends Exception
+public interface Conversion<FROM, TO>
 {
-    public InformativeStackTrace( String message )
+    TO convert( FROM source );
+
+    public static final Conversion<Number, Integer> TO_INTEGER = new Conversion<Number, Integer>()
     {
-        super( message );
-    }
+        @Override
+        public Integer convert( Number source )
+        {
+            return source.intValue();
+        }
+    };
 }

@@ -22,6 +22,7 @@ package org.neo4j.kernel.ha.zookeeper;
 
 import static org.neo4j.kernel.ha.HaSettings.allow_init_cluster;
 import static org.neo4j.kernel.ha.HaSettings.cluster_name;
+import static org.neo4j.kernel.ha.HaSettings.com_chunk_size;
 import static org.neo4j.kernel.ha.HaSettings.lock_read_timeout;
 import static org.neo4j.kernel.ha.HaSettings.max_concurrent_channels_per_slave;
 import static org.neo4j.kernel.ha.HaSettings.read_timeout;
@@ -62,13 +63,14 @@ import org.neo4j.helpers.Exceptions;
 import org.neo4j.helpers.Pair;
 import org.neo4j.kernel.GraphDatabaseAPI;
 import org.neo4j.kernel.HaConfig;
-import org.neo4j.kernel.InformativeStackTrace;
 import org.neo4j.kernel.SlaveUpdateMode;
 import org.neo4j.kernel.configuration.Config;
 import org.neo4j.kernel.ha.Broker;
 import org.neo4j.kernel.ha.ClusterEventReceiver;
 import org.neo4j.kernel.ha.ConnectionInformation;
 import org.neo4j.kernel.ha.HaSettings;
+import org.neo4j.kernel.ha.KnownReevaluationCauses;
+import org.neo4j.kernel.ha.Master;
 import org.neo4j.kernel.ha.MasterClientFactory;
 import org.neo4j.kernel.ha.MasterImpl;
 import org.neo4j.kernel.ha.MasterServer;
@@ -83,7 +85,8 @@ import org.neo4j.kernel.impl.transaction.xaframework.NullLogBuffer;
 import org.neo4j.kernel.impl.transaction.xaframework.XaLogicalLog;
 import org.neo4j.kernel.impl.util.StringLogger;
 
-public class ZooClient extends AbstractZooKeeperManager
+public class
+        ZooClient extends AbstractZooKeeperManager
 {
     static final String MASTER_NOTIFY_CHILD = "master-notify";
     static final String MASTER_REBOUND_CHILD = "master-rebound";
@@ -180,10 +183,10 @@ public class ZooClient extends AbstractZooKeeperManager
 
     public Object instantiateMasterServer( GraphDatabaseAPI graphDb )
     {
-        int timeOut = conf.isSet( lock_read_timeout ) ? conf.getInteger( lock_read_timeout ) : conf.getInteger( read_timeout );
+        int timeOut = conf.isSet( lock_read_timeout ) ? conf.get( lock_read_timeout ) : conf.get( read_timeout );
         return new MasterServer( new MasterImpl( graphDb, timeOut ), Machine.splitIpAndPort( haServer ).other(),
-                graphDb.getMessageLog(), conf.getInteger( max_concurrent_channels_per_slave ), timeOut,
-                new BranchDetectingTxVerifier( graphDb ) );
+                graphDb.getMessageLog(), conf.get( max_concurrent_channels_per_slave ), timeOut,
+                new BranchDetectingTxVerifier( graphDb ), conf.get( com_chunk_size ) );
     }
 
     @Override
@@ -195,7 +198,7 @@ public class ZooClient extends AbstractZooKeeperManager
     public Object instantiateSlaveServer( GraphDatabaseAPI graphDb, Broker broker, SlaveDatabaseOperations ops )
     {
         return new SlaveServer( new SlaveImpl( graphDb, broker, ops ), Machine.splitIpAndPort( haServer ).other(),
-                graphDb.getMessageLog() );
+                graphDb.getMessageLog(), conf.get( com_chunk_size ) );
     }
 
     @Override
@@ -310,6 +313,20 @@ public class ZooClient extends AbstractZooKeeperManager
 
     protected void setDataChangeWatcher( String child, int currentMasterId )
     {
+        setDataChangeWatcher( child, currentMasterId, true );
+    }
+
+    /**
+     * Writes into one of master-notify or master-rebound the value given. If skipOnSame
+     * is true then if the value there is the same as the argument nothing will be written.
+     * A watch is always set on the node.
+     * @param child The node to write to
+     * @param currentMasterId The value to write
+     * @param skipOnSame If true, then if the existing value is the same as currentMasterId nothing
+     *                   will be written.
+     */
+    protected void setDataChangeWatcher( String child, int currentMasterId, boolean skipOnSame )
+    {
         try
         {
             String root = getRoot();
@@ -321,7 +338,7 @@ public class ZooClient extends AbstractZooKeeperManager
                 data = zooKeeper.getData( path, true, null );
                 exists = true;
 
-                if ( ByteBuffer.wrap( data ).getInt() == currentMasterId )
+                if ( skipOnSame && ByteBuffer.wrap( data ).getInt() == currentMasterId )
                 {
                     msgLog.logMessage( child + " not set, is already " + currentMasterId );
                     return;
@@ -655,6 +672,21 @@ public class ZooClient extends AbstractZooKeeperManager
         }
     }
 
+    public int getCurrentMasterNotify()
+    {
+        String path = rootPath + "/" + MASTER_NOTIFY_CHILD;
+        byte[] data;
+        try
+        {
+            data = zooKeeper.getData( path, true, null );
+            return ByteBuffer.wrap( data ).getInt();
+        }
+        catch ( Exception e )
+        {
+            throw new RuntimeException( e );
+        }
+    }
+
     public void getJmxConnectionData( ConnectionInformation connection )
     {
         String path = rootPath + "/" + HA_SERVERS_CHILD + "/" + machineId + "-jmx";
@@ -806,10 +838,18 @@ public class ZooClient extends AbstractZooKeeperManager
     public void shutdown()
     {
         watcher.shutdown();
-        msgLog.close();
         this.shutdown = true;
         shutdownSlaves();
         super.shutdown();
+    }
+
+    @Override
+    protected void masterElectionHappened( Pair<Master, Machine> previousMaster, Machine newMaster )
+    {
+        if ( previousMaster == NO_MASTER_MACHINE_PAIR && newMaster.getMachineId() == getMyMachineId() )
+        {
+            setDataChangeWatcher( MASTER_REBOUND_CHILD, getMyMachineId(), false );
+        }
     }
 
     private void shutdownSlaves()
@@ -1011,7 +1051,7 @@ public class ZooClient extends AbstractZooKeeperManager
                 if ( path == null && event.getState() == Watcher.Event.KeeperState.Expired )
                 {
                     keeperState = KeeperState.Expired;
-                    clusterReceiver.reconnect( new InformativeStackTrace( "Reconnect due to session expired" ) );
+                    clusterReceiver.reconnect( KnownReevaluationCauses.ZK_SESSION_EXPIRED );
                 }
                 else if ( path == null && event.getState() == Watcher.Event.KeeperState.SyncConnected )
                 {
@@ -1022,9 +1062,18 @@ public class ZooClient extends AbstractZooKeeperManager
                         {
                             sequenceNr = setup();
                             msgLog.logMessage( "Did setup, seq=" + sequenceNr + " new sessionId=" + newSessionId );
+                            int previousMaster = getCurrentMasterNotify(); // used in check below
                             if ( sessionId != -1 )
                             {
-                                clusterReceiver.newMaster( new InformativeStackTrace( "Got SyncConnected event from ZK" ) );
+                                clusterReceiver.newMaster( KnownReevaluationCauses.ZK_INITIAL_SYNC_CONNECTED );
+                                if (getCurrentMasterNotify() == getMyMachineId() && previousMaster == getMyMachineId())
+                                {
+                                    /*
+                                     * Apparently no one claimed the role of master while i was away.
+                                     * I'll ping everyone to make sure.
+                                     */
+                                    setDataChangeWatcher( MASTER_REBOUND_CHILD, getMyMachineId(), false );
+                                }
                             }
                             sessionId = newSessionId;
                         }
@@ -1058,8 +1107,7 @@ public class ZooClient extends AbstractZooKeeperManager
                     if ( path.contains( currentMaster.getZooKeeperPath() ) )
                     {
                         msgLog.logMessage("Acting on it, calling newMaster()");
-                                clusterReceiver.newMaster( new InformativeStackTrace(
-                                        "NodeDeleted event received (a machine left the cluster)" ) );
+                                clusterReceiver.newMaster( KnownReevaluationCauses.ZK_MACHINE_LEFT );
                     }
                 }
                 else if ( event.getType() == Watcher.Event.EventType.NodeChildrenChanged )
@@ -1092,8 +1140,7 @@ public class ZooClient extends AbstractZooKeeperManager
                             try
                             {
                                 electionHappening = true;
-                                clusterReceiver.newMaster( new InformativeStackTrace(
-                                        "NodeDataChanged event received (someone though I should be the master)" ) );
+                                clusterReceiver.newMaster( KnownReevaluationCauses.ZK_ELECTED_MASTER );
                                 serversRefreshed = true;
                             }
                             finally
@@ -1112,8 +1159,7 @@ public class ZooClient extends AbstractZooKeeperManager
                             try
                             {
                                 electionHappening = true;
-                                clusterReceiver.newMaster( new InformativeStackTrace(
-                                        "NodeDataChanged event received (new master ensures I'm slave)" ) );
+                                clusterReceiver.newMaster( KnownReevaluationCauses.ZK_MASTER_AVAILABLE );
                                 serversRefreshed = true;
                             }
                             finally
@@ -1143,7 +1189,7 @@ public class ZooClient extends AbstractZooKeeperManager
             {
                 // It's OK. We're in a state where we cannot accept incoming events.
             }
-            catch ( Exception e )
+            catch ( Throwable e )
             {
                 msgLog.logMessage( "Error in ZooClient.process", e, true );
                 throw Exceptions.launderedException( e );
@@ -1249,7 +1295,7 @@ public class ZooClient extends AbstractZooKeeperManager
                         {
                             cachedSlaves.put( id, Pair.of( new SlaveClient( machine.getMachineId(), machine.getServer().first(),
                                     machine.getServer().other().intValue(), msgLog, storeId,
-                                    conf.get( HaSettings.max_concurrent_channels_per_slave ) ),
+                                    conf.get( HaSettings.max_concurrent_channels_per_slave ), conf.get( com_chunk_size ) ),
                                     machine ) );
                         }
                     }
