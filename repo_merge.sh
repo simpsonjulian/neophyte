@@ -1,5 +1,5 @@
 #!/bin/bash
-#set -x
+set -x
 
 die() {
   echo $1;exit 1
@@ -52,8 +52,6 @@ for branch in $BRANCHES; do
   in_repo "git branch $branch"
   in_repo "git checkout $branch"
 done
-
-exit
 
 # Step 4: merge all the things!
 for branch in $BRANCHES; do
