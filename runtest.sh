@@ -67,6 +67,7 @@ create_repo repo2
 
 # perform merge
 destination=`mktemp -d -t repomergeoutputdirectory`
+rm -rf $destination
 ./repo_merge.sh $destination $username "repo1 repo2" "branch1 branch2"
 
 # assert commits/ files exists in the right places
