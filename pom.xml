@@ -15,6 +15,7 @@
     <module>enterprise</module>
     <module>manual</module>
     <module>packaging</module>
+      <module>issuemigrator</module>
   </modules>
 
   <distributionManagement>
