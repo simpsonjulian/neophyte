@@ -44,7 +44,7 @@ mkdir -p $destination
 
 # Step 1: make a README and master branch
 echo "Replace me with beautiful readme " > $destination/README
-in_repo "git add README ;git commit -m 'First commit' README"
+in_repo "git add README ;git commit -m 'Repo merge initial commit' README"
 
 # Step 2: make remotes for all the projects
 for project in $PROJECTS; do
