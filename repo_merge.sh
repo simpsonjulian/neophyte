@@ -6,7 +6,7 @@ die() {
 }
 
 destination=$1
-[ -n "$destination" ] || die "Usage: $0 /path/to/new/repo <github user> <list of repos> <list of branches>"
+[ -n "$destination" ] || die "Usage: $0 /path/to/new/repo <github user> <list of repos> <list of branches> <new repo>"
 
 GITHUB_USER=$2
 [ -n "$GITHUB_USER" ] || GITHUB_USER='neo4j'
@@ -19,6 +19,10 @@ echo "PROJECTS: $PROJECTS"
 BRANCHES=$4
 [ -n "$BRANCHES" ] || BRANCHES="1.5-maint 1.6-maint 1.7-maint 1.8-maint"
 echo "BRANCHES: $BRANCHES"
+
+REPOSITORY=$5
+[ -n "$REPOSITORY" ] || REPOSITORY="neo4j"
+echo "REPOSITORY: $REPOSITORY"
 
 in_repo() {
   local command=$1
@@ -64,4 +68,11 @@ done
 in_repo "git checkout master"
 for project in $PROJECTS; do
   merge_branch $project master
+done
+
+# Step 5: push to Github
+in_repo "git remote add origin git@github.com:$GITHUB_USER/$REPOSITORY.git"
+in_repo "git push origin master"
+for branch in $BRANCHES; do
+  in_repo "git push origin $branch"
 done
