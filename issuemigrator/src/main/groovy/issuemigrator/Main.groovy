@@ -8,15 +8,16 @@ import groovyx.net.http.HttpResponseException
  */
 class Main {
     public static void main(String[] args) {
-        if (args.length < 3) throw new IllegalArgumentException("Usage: issuemigrator <destination> <username> <password> <repositories>")
+        if (args.length < 4) throw new IllegalArgumentException("Usage: issuemigrator <destination user> <destination> <username> <password> <repositories>")
 
-        def destination = args[0]
-        def username = args[1]
-        def password = args[2]
-        def repositories = args.length == 4 ? args[3] : "community advanced enterprise manual packaging python-embedded cypher-plugin gremlin-plugin parents testing-utils"
+        def destinationUser = args[0]
+        def destination = args[1]
+        def username = args[2]
+        def password = args[3]
+        def repositories = args.length == 5 ? args[4] : "community advanced enterprise manual packaging python-embedded cypher-plugin gremlin-plugin parents testing-utils"
 
         try {
-            new IssueMigrator(destination, username, password).migrateIssues(repositories.split(" "))
+            new IssueMigrator(destinationUser, destination, username, password).migrateIssues(repositories.split(" "))
         } catch (HttpResponseException e) {
             println e.response.status
             println e.response.data

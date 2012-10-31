@@ -5,6 +5,7 @@ package issuemigrator
  * All rights reserved
  */
 
+import groovy.util.logging.Log
 import groovyx.net.http.ContentType
 import groovyx.net.http.HTTPBuilder
 import groovyx.net.http.HttpResponseException
@@ -12,17 +13,17 @@ import groovyx.net.http.RESTClient
 import org.apache.http.HttpResponse
 import org.apache.http.client.methods.HttpPatch
 import org.apache.http.entity.StringEntity
-import groovy.util.logging.Log
 
 @Log
 class IssueMigrator {
+    private static final int PAGE_SIZE = 100
     final HTTPBuilder origin
     final RESTClient destination
     final String encodedCredentials
 
-    IssueMigrator(repository, username, password) {
+    IssueMigrator(destinationUser, repository, username, password) {
         origin = new HTTPBuilder('https://api.github.com/repos/neo4j/')
-        destination = new RESTClient("https://api.github.com/repos/$username/$repository/")
+        destination = new RESTClient("https://api.github.com/repos/$destinationUser/$repository/")
 
         encodedCredentials = "$username:$password".getBytes().encodeBase64().toString()
     }
@@ -78,8 +79,20 @@ class IssueMigrator {
 
     def migrateOpenIssues(repository) {
         try {
-            origin.get(path: "$repository/issues", headers: [Authorization: "Basic $encodedCredentials"]) { resp, json ->
-                json.findAll().eachWithIndex { issue, index -> migrateOpenIssue(repository, issue)}
+            for (int page = 1; true; page++) {
+                log.info("migrating issues for $repository, page $page")
+
+                def json = origin.get(path: "$repository/issues", query: [page: page, per_page: PAGE_SIZE], headers: [Authorization: "Basic $encodedCredentials"]) { resp, json ->
+                    return json
+                }
+
+                def size = json.size()
+
+                log.info("page contains $size issues...")
+
+                if (size == 0) return
+
+                json.findAll().each { issue -> migrateOpenIssue(repository, issue)}
             }
         } catch (HttpResponseException e) {
             // testing-utils doesn't have issues as it is a fork from DM's account

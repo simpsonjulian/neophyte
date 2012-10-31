@@ -6,11 +6,11 @@ die() {
 }
 
 destination=$1
-[ -n "$destination" ] || die "Usage: $0 /path/to/new/repo <github user> <list of repos> <list of branches> <new repo>"
+[ -n "$destination" ] || die "Usage: $0 /path/to/new/repo <github user> <list of repos> <list of branches> <new repo user> <new repo name>"
 
-GITHUB_USER=$2
-[ -n "$GITHUB_USER" ] || GITHUB_USER='neo4j'
-echo "GITHUB_USER: $GITHUB_USER"
+ORIGIN_USER=$2
+[ -n "$ORIGIN_USER" ] || ORIGIN_USER='neo4j'
+echo "ORIGIN_USER: $ORIGIN_USER"
 
 PROJECTS=$3
 [ -n "$PROJECTS" ] || PROJECTS="community advanced enterprise manual packaging python-embedded cypher-plugin gremlin-plugin parents testing-utils"
@@ -20,8 +20,12 @@ BRANCHES=$4
 [ -n "$BRANCHES" ] || BRANCHES="1.5-maint 1.6-maint 1.7-maint 1.8-maint"
 echo "BRANCHES: $BRANCHES"
 
-REPOSITORY=$5
-[ -n "$REPOSITORY" ] || REPOSITORY="neo4j"
+DESTINATION_USER=$5
+[ -n "$DESTINATION_USER" ] || DESTINATION_USER="neo4j"
+echo "DESTINATION_USER: $DESTINATION_USER"
+
+REPOSITORY=$6
+[ -n "$REPOSITORY" ] || REPOSITORY="repomergetest"
 echo "REPOSITORY: $REPOSITORY"
 
 in_repo() {
@@ -48,7 +52,7 @@ in_repo "git add README ;git commit -m 'Repo merge initial commit' README"
 
 # Step 2: make remotes for all the projects
 for project in $PROJECTS; do
-  in_repo "git remote add -f ${project} git://github.com/${GITHUB_USER}/${project}.git"
+  in_repo "git remote add -f ${project} git://github.com/${ORIGIN_USER}/${project}.git"
 done
 
 # Step 3: make all the branches that we need
@@ -71,7 +75,7 @@ for project in $PROJECTS; do
 done
 
 # Step 5: push to Github
-in_repo "git remote add origin git@github.com:$GITHUB_USER/$REPOSITORY.git"
+in_repo "git remote add origin git@github.com:$DESTINATION_USER/$REPOSITORY.git"
 in_repo "git push origin master"
 for branch in $BRANCHES; do
   in_repo "git push origin $branch"
