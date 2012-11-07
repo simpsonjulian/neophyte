@@ -17,6 +17,7 @@ import org.apache.http.entity.StringEntity
 @Log
 class IssueMigrator {
     private static final int PAGE_SIZE = 100
+
     final HTTPBuilder origin
     final RESTClient destination
     final String encodedCredentials
@@ -92,7 +93,7 @@ class IssueMigrator {
 
                 if (size == 0) return
 
-                json.findAll().each { issue -> migrateOpenIssue(repository, issue)}
+                json.findAll().eachWithIndex { issue -> migrateOpenIssue(repository, issue)}
             }
         } catch (HttpResponseException e) {
             // testing-utils doesn't have issues as it is a fork from DM's account
@@ -104,17 +105,19 @@ class IssueMigrator {
         issue.milestone = null
         issue.assignee = null
 
-        def response = destination.post(path: 'issues', body: issue, requestContentType: ContentType.JSON,
-                headers: [Authorization: "Basic $encodedCredentials"])
+        String user = issue.user.login
+        String body = issue.body
+
+        issue.body = "@$user: '$body'".toString()
+
+        def response = destination.post(path: 'issues', body: issue, requestContentType: ContentType.JSON, headers: [Authorization: "Basic $encodedCredentials"])
 
         migrateComments(repository, issue, response.data.number)
     }
 
     private void migrateComments(repository, oldIssue, newIssueNumber) {
-        // TODO: sort out mentions-as-posters somehow
-        //lassewesthRepo.post(path: "issues/$newIssueNumber/comments", body: [body: "This issue was migrated from
-        // $oldIssue.html_url".toString()], requestContentType: ContentType.JSON,
-        // headers: [Authorization: "Basic bGFzc2V3ZXN0aDp1OTcxNzQ2"])
+        def url = oldIssue.html_url
+        destination.post(path: "issues/$newIssueNumber/comments", body: [body: "This issue was migrated from $url"], requestContentType: ContentType.JSON, headers: [Authorization: "Basic $encodedCredentials"])
 
         origin.get(path: "$repository/issues/${oldIssue.number}/comments", headers: [Authorization: "Basic $encodedCredentials"]) { resp, json ->
             json.findAll().each { comment -> migrateComment(newIssueNumber, comment) }
@@ -122,8 +125,11 @@ class IssueMigrator {
     }
 
     private void migrateComment(newIssueNumber, comment) {
-        destination.post(path: "issues/$newIssueNumber/comments", body: comment,
-                requestContentType: ContentType.JSON,
-                headers: [Authorization: "Basic $encodedCredentials"])
+        String user = comment.user.login
+        String body = comment.body
+
+        comment.body = "@$user: $body".toString()
+
+        destination.post(path: "issues/$newIssueNumber/comments", body: comment, requestContentType: ContentType.JSON, headers: [Authorization: "Basic $encodedCredentials"])
     }
 }
