@@ -13,11 +13,13 @@ ORIGIN_USER=$2
 echo "ORIGIN_USER: $ORIGIN_USER"
 
 PROJECTS=$3
-[ -n "$PROJECTS" ] || PROJECTS="community advanced enterprise manual packaging python-embedded cypher-plugin gremlin-plugin parents testing-utils"
+#[ -n "$PROJECTS" ] || PROJECTS="community advanced enterprise manual packaging python-embedded cypher-plugin gremlin-plugin parents testing-utils"
+[ -n "$PROJECTS" ] || PROJECTS="manual packaging"
 echo "PROJECTS: $PROJECTS"
 
 BRANCHES=$4
-[ -n "$BRANCHES" ] || BRANCHES="1.5-maint 1.6-maint 1.7-maint 1.8-maint"
+#[ -n "$BRANCHES" ] || BRANCHES="1.5-maint 1.6-maint 1.7-maint 1.8-maint"
+[ -n "$BRANCHES" ] || BRANCHES="1.5-maint 1.6-maint"
 echo "BRANCHES: $BRANCHES"
 
 DESTINATION_USER=$5
@@ -28,10 +30,56 @@ REPOSITORY=$6
 [ -n "$REPOSITORY" ] || REPOSITORY="neo4j"
 echo "REPOSITORY: $REPOSITORY"
 
+working_dir="/tmp/repomerge"
+rm -rf $working_dir
+mkdir -p $working_dir
+
+# algorithm:
+# clone all projects and branches
+# foreach $branch
+#     foreach $project
+#         run filter-branch
+#         pull or fetch into new repo
+
+
+
+
+
+
 in_repo() {
-  local command=$1
-  ( cd $destination && eval $command )
+  local directory=$1
+  local command=$2
+  ( cd "$working_dir/$directory" && $command )
 }
+
+in_working_dir() {
+  local command=$1
+  ( cd $working_dir && eval $command )
+}
+
+for project in $PROJECTS; do
+  in_working_dir "git clone git://github.com/neo4j/$project"
+  for branch in $BRANCHES; do
+    pattern="^\.$|^\.\/\.git$|^\.\/${project}$"
+    movecommand="mkdir -p $project && find . -maxdepth 1 | egrep -v $pattern | while read object; do git mv -f \$object $project .; done || true"
+    command="git filter-branch -f --tree-filter '$movecommand' HEAD"
+    in_repo $project "$command" 
+    #in_repo $project "mkdir -p $project"
+    #in_repo $project "find . -maxdepth 1 | egrep -v \"^\.$|^\.\/\.git$|^\.\/\${project}$\" | while read object; do echo \"\${object} ${project}\"; done"
+  done
+done
+
+
+
+
+
+# old stuff
+exit
+
+
+
+
+
 
 merge_branch() {
   local project=$1
@@ -75,8 +123,9 @@ for project in $PROJECTS; do
 done
 
 # Step 5: push to Github
-in_repo "git remote add origin git@github.com:$DESTINATION_USER/$REPOSITORY.git"
-in_repo "git push origin master"
-for branch in $BRANCHES; do
-  in_repo "git push origin $branch"
-done
+#in_repo "git remote add origin git@github.com:$DESTINATION_USER/$REPOSITORY.git"
+#in_repo "git push origin master"
+#for branch in $BRANCHES; do
+#  in_repo "git push origin $branch"
+#done
+git filter-branch -f --tree-filter mkdir -p manual && find . -maxdepth 1 | egrep -v '^\.|^\.\.|^\.git|^\.\/manual' | while read o; do git mv -f  manual; done 
