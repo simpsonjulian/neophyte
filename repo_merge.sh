@@ -60,10 +60,11 @@ in_working_dir() {
 for project in $PROJECTS; do
   in_working_dir "git clone git://github.com/neo4j/$project"
   for branch in $BRANCHES; do
-    pattern="^\.$|^\.\/\.git$|^\.\/${project}$"
-    movecommand="mkdir -p $project && find . -maxdepth 1 | egrep -v $pattern | while read object; do git mv -f \$object $project .; done || true"
-    command="git filter-branch -f --tree-filter '$movecommand' HEAD"
-    in_repo $project "$command" 
+    #pattern="^\.$|^\.\/\.git$|^\.\/${project}$"
+    #movecommand="mkdir -p $project && find . -maxdepth 1 | egrep -v $pattern | while read object; do git mv -f \$object $project .; done || true"
+    #command="git filter-branch -f --tree-filter '$movecommand' HEAD"
+    my_working_dir=$(pwd)
+    in_repo $project "${my_working_dir}/filter.sh $project"
     #in_repo $project "mkdir -p $project"
     #in_repo $project "find . -maxdepth 1 | egrep -v \"^\.$|^\.\/\.git$|^\.\/\${project}$\" | while read object; do echo \"\${object} ${project}\"; done"
   done
@@ -128,4 +129,3 @@ done
 #for branch in $BRANCHES; do
 #  in_repo "git push origin $branch"
 #done
-git filter-branch -f --tree-filter mkdir -p manual && find . -maxdepth 1 | egrep -v '^\.|^\.\.|^\.git|^\.\/manual' | while read o; do git mv -f  manual; done 
